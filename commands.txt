@@ -1,0 +1,2 @@
+make clean && make
+NS_LOGLEVEL=3 NS_CACHE_FILE=/tmp/nor NS_SIZE=65536 NS_ERASE_SIZE=256 NS_WEAK_PAGES="rnd 0,1;32,0;" NS_GRAVE_PAGES="rnd 3,1;" LD_LIBRARY_PATH=`pwd` ./main
