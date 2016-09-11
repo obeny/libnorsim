@@ -12,8 +12,8 @@
 #define ERR_INIT_FAILED     (-1)
 #define ERR_NOT_INITIALIZED (-2)
 
-#define PARSE_NODE_DELIM ';'
-#define PARSE_PROP_DELIM ','
+#define PARSE_NODE_DELIM   ';'
+#define PARSE_PROP_DELIM   ','
 #define PARSE_PREFIX_DELIM ' '
 
 #define PARSE_BEH_EIO "eio"

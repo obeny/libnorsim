@@ -1,5 +1,5 @@
 // TODO:
-// func wrappers (pwrite, ioctl: MEMINFO, UNLOCK, ERASE)
+// func wrappers (ioctl: MEMINFO, UNLOCK, ERASE)
 // random
 // synch
 // improve exit
