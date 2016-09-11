@@ -266,7 +266,8 @@ static void sig_handler_USR1(int signum)
 
 static void usage(void)
 {
-	puts("\nusage: ");
+	printf("\nversion: %s\n", VERSION);
+	puts("usage: ");
 	puts("following environment variables can be defined to set library behabior:");
 	puts("\t" ENV_LOGLEVEL    ":\t0 - SILENCE, 1 - ERRORS, 2 - INFO, 3 - DEBUG");
 	puts("\t" ENV_CACHE_FILE  ":\tpath to file which will be used as storage");

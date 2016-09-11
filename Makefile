@@ -26,11 +26,13 @@ endif
 CFLAGS += $(CFLAGS_WRN)
 CFLAGS += $(CFLAGS_LIBS)
 CFLAGS += $(CFLAGS_DEP)
+CFLAGS += -DVERSION=\"$(VERSION)\"
 
 all : $(PRG) $(LIB)
 
 $(LIB) : $(LIB_OBJS)
-		$(CC) $^ -o $(LIB) $(CFLAGS) $(CFLAGS_LIB) -shared -Wl,-soname,$(LIB)
+		$(CC) $^ -o $(LIB).$(VERSION) $(CFLAGS) $(CFLAGS_LIB) -shared -Wl,-soname,$(LIB) -Wl,-soname,$(LIB).$(VERSION)
+		ln -s $(LIB).$(VERSION) $(LIB)
 
 $(PRG) : $(PRG_OBJS) $(LIB)
 		$(CC) $^ -o $(PRG) $(CFLAGS) -L. -l$(LIB_NAME)
