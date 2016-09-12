@@ -1,5 +1,4 @@
 // TODO:
-// synch
 // random
 // improve exit
 // bit-flips ??
@@ -33,9 +32,9 @@ static char cache_file_realpath[PATH_MAX + 1];
 
 static char *cache_file;
 static unsigned loglevel = E_LOGLEVEL_INFO;
-static unsigned pages = 0;
-static unsigned size;
-static unsigned erase_size;
+static unsigned long pages = 0;
+static unsigned long size;
+static unsigned long erase_size;
 
 static int initialized = 0;
 static st_page_t *page_info;
@@ -119,14 +118,14 @@ __attribute__((constructor)) void init(void)
 	}
 	else
 		size = (unsigned)strtoul(env_size, NULL, 10) * 1024;
-	PALL(1, "SET size:\t\t0x%04x (%ukB)\n", size, size / 1024);
+	PALL(1, "SET size:\t\t0x%04lx (%lukB)\n", size, size / 1024);
 	if (NULL == (env_erase_size = getenv(ENV_ERASE_SIZE))) {
 		PERR("No erase_size given, interrupting!\n");
 		goto err;
 	}
 	else
 		erase_size = (unsigned)strtoul(env_erase_size, NULL, 10) * 1024;
-	PALL(1, "SET erase_size:\t\t0x%04x (%ukB)\n", erase_size, erase_size / 1024);
+	PALL(1, "SET erase_size:\t\t0x%04lx (%lukB)\n", erase_size, erase_size / 1024);
 	// WEAK PAGES
 	if (NULL == (env_weak_pages = getenv(ENV_WEAK_PAGES))) {
 		PINF("No weak_pages given, assuming no weak pages\n");
@@ -144,7 +143,7 @@ __attribute__((constructor)) void init(void)
 		PINF("No failure types defined, no faults will be forwareded to user program\n");
 	// CALCULATE PAGES
 	pages = size / erase_size;
-	PALL(1, "SET pages:\t\t%u\n", pages);
+	PALL(1, "SET pages:\t\t%lu\n", pages);
 	/*
 	 * VALIDATE PAGE SYNTAX
 	 */
@@ -211,8 +210,8 @@ __attribute__((constructor)) void init(void)
 	}
 	stat(cache_file, &st);
 	cache_file_size = st.st_size;
-	if (size != cache_file_size) {
-		PERR("Given flash size and cache_file sizes differs (%u != %u)\n", size, (unsigned)cache_file_size);
+	if (size != (unsigned long)cache_file_size) {
+		PERR("Given flash size and cache_file sizes differs (%lu != %lu)\n", size, (unsigned long)cache_file_size);
 		goto err;
 	}
 
@@ -391,7 +390,8 @@ static int parse_page_env(const char const *str, e_page_type_t type)
 	char *end_node;
 	char *end_prop;
 	int count = -1;
-	unsigned page, cycles;
+	unsigned cycles;
+	unsigned long page;
 
 	if (NULL == str)
 		return (0);
@@ -405,9 +405,9 @@ static int parse_page_env(const char const *str, e_page_type_t type)
 		page = strtoul(cur_node, &end_prop, 10);
 		cur_prop = ++end_prop;
 		cycles = strtoul(cur_prop, NULL, 10);
-		PDBG("page=%u,\tcycles=%u\n", page, cycles);
+		PDBG("page=%lu,\tcycles=%u\n", page, cycles);
 		if (page > pages) {
-			PERR("trying to set non existing page (page=%u > pages=%u)\n", page, pages);
+			PERR("trying to set non existing page (page=%lu > pages=%lu)\n", page, pages);
 			return -1;
 		}
 		page_info[page].type = type;
@@ -526,8 +526,8 @@ ssize_t pread(int fd, void *buf, size_t count, off_t offset)
 	int ret = -1;
 	int rnd;
 	char rnd_byte;
-	unsigned index;
-	unsigned index_in;
+	unsigned long index;
+	unsigned long index_in;
 
 	if (fd != cache_file_fd)
 		ret = __real_pread(fd, buf, count, offset);
@@ -544,7 +544,7 @@ ssize_t pread(int fd, void *buf, size_t count, off_t offset)
 				} else {
 					pthread_mutex_unlock(&mutex);
 					if (E_BEH_EIO == beh_grave) {
-						PDBG("EIO at page: %u\n", index);
+						PDBG("EIO at page: %lu\n", index);
 						ret = -1;
 					} else {
 						index_in = offset - index * erase_size;
@@ -555,7 +555,7 @@ ssize_t pread(int fd, void *buf, size_t count, off_t offset)
 						ret = __real_pread(fd, buf, count, offset);
 						rnd = rand() % count;
 						rnd_byte = ((char*)buf)[rnd] ^ rnd;
-						PDBG("RND at page: %u[%u], expected: 0x%02X, is: 0x%02X\n", index, index_in + rnd, ((char*)buf)[rnd], rnd_byte & 0xFF);
+						PDBG("RND at page: %lu[%lu], expected: 0x%02X, is: 0x%02X\n", index, index_in + rnd, ((char*)buf)[rnd], rnd_byte & 0xFF);
 						((char*)buf)[rnd] = rnd_byte & 0xFF;
 					}
 				}
@@ -577,8 +577,8 @@ ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset)
 	int ret = -1;
 	int rnd;
 	char rnd_byte;
-	unsigned index;
-	unsigned index_in;
+	unsigned long index;
+	unsigned long index_in;
 
 	if (fd != cache_file_fd)
 		ret = __real_pwrite(fd, buf, count, offset);
@@ -595,7 +595,7 @@ ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset)
 				} else {
 					pthread_mutex_unlock(&mutex);
 					if (E_BEH_EIO == beh_weak) {
-						PDBG("EIO at page: %u\n", index);
+						PDBG("EIO at page: %lu\n", index);
 						ret = -1;
 					} else {
 						index_in = offset - index * erase_size;
@@ -605,7 +605,7 @@ ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset)
 						}
 						rnd = rand() % count;
 						rnd_byte = ((char*)buf)[rnd] ^ rnd;
-						PDBG("RND at page: %u[%u], expected: 0x%02X, is: 0x%02X\n", index, index_in + rnd, ((char*)buf)[rnd], rnd_byte & 0xFF);
+						PDBG("RND at page: %lu[%lu], expected: 0x%02X, is: 0x%02X\n", index, index_in + rnd, ((char*)buf)[rnd], rnd_byte & 0xFF);
 						((char*)buf)[rnd] = rnd_byte & 0xFF;
 						ret = __real_pwrite(fd, buf, count, offset);
 					}

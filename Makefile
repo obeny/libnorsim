@@ -18,6 +18,9 @@ LIB_NAME := norsim
 PRG := main
 LIB := lib$(LIB_NAME).so
 
+ifdef 32BIT
+CFLAGS += -m32
+endif
 ifdef BUILD_DEBUG
 CFLAGS += $(CFLAGS_DBG)
 else
@@ -38,7 +41,7 @@ $(PRG) : $(PRG_OBJS) $(LIB)
 		$(CC) $^ -o $(PRG) $(CFLAGS) -L. -l$(LIB_NAME)
 
 clean :
-		find . -name "*.o" -o -name "*.d" -o -name "*.so.*" | xargs rm -f
+		find . -name "*.o" -o -name "*.d" -o -name "*.so.*" -o -name "*.so" | xargs rm -f
 		rm -f $(PRG)
 
 $(LIB_OBJS) : %.o : %.c
