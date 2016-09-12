@@ -61,6 +61,16 @@ do { \
 
 #define STATS_FILL(t,a,op) t.a##_##op = get_##a(t.a##_##op,page_info[i].op)
 
+typedef int (*open_ptr_t)(const char *path, int oflag, ...);
+typedef int (*close_ptr_t)(int fd);
+
+typedef ssize_t (*pread_ptr_t)(int fd, void *buf, size_t count, off_t offset);
+typedef ssize_t (*pwrite_ptr_t)(int fd, const void *buf, size_t count, off_t offset);
+typedef ssize_t (*read_ptr_t)(int fd, void *buf, size_t count);
+typedef ssize_t (*write_ptr_t)(int fd, const void *buf, size_t count);
+
+typedef int (*ioctl_ptr_t)(int fd, unsigned long request, ...);
+
 typedef enum
 {
 	E_BEH_EIO = 0,
@@ -82,6 +92,17 @@ typedef enum
 	E_PAGE_BIT_FLIP
 } e_page_type_t;
 
+typedef enum
+{
+	E_SYSCALL_OPEN,
+	E_SYSCALL_CLOSE,
+	E_SYSCALL_PREAD,
+	E_SYSCALL_PWRITE,
+	E_SYSCALL_READ,
+	E_SYSCALL_WRITE,
+	E_SYSCALL_IOCTL
+} e_syscall_t;
+
 typedef struct
 {
 	e_page_type_t type;
@@ -101,5 +122,15 @@ typedef struct
 	unsigned long min_erases;
 	unsigned long max_erases;
 } st_page_stats_t;
+
+typedef struct {
+	open_ptr_t _open;
+	close_ptr_t _close;
+	pread_ptr_t _pread;
+	pwrite_ptr_t _pwrite;
+	read_ptr_t _read;
+	write_ptr_t _write;
+	ioctl_ptr_t _ioctl;
+} st_syscalls_t;
 
 #endif // __LIBNORSIM_H__

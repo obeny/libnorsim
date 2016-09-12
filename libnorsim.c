@@ -1,4 +1,7 @@
 // TODO:
+// normal pages report
+// empty_string
+// sighandler
 // random
 // improve exit
 // bit-flips ??
@@ -30,13 +33,16 @@ pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static char cache_file_realpath[PATH_MAX + 1];
 
+static char empty_string[1];
+
 static char *cache_file;
 static unsigned loglevel = E_LOGLEVEL_INFO;
-static unsigned long pages = 0;
+static unsigned long pages;
 static unsigned long size;
 static unsigned long erase_size;
 
-static int initialized = 0;
+static int initialized;
+static int init_done;
 static st_page_t *page_info;
 
 static int cache_file_fd = -1;
@@ -47,6 +53,9 @@ static e_beh_t beh_grave;
 
 static mtd_info_t mtd_info;
 
+static st_syscalls_t real_syscalls;
+
+static void norsim_init(void);
 static void sig_handler_USR1(int signum);
 static void usage(void);
 static void report_pages(void);
@@ -57,17 +66,53 @@ static int parse_page_env(const char const *str, e_page_type_t type);
 inline static unsigned get_page_by_offset(off_t offset);
 inline static e_page_type_t get_page_type_by_index(unsigned index);
 
-static int (*__real_open)(const char *path, int oflag, ...);
-static int (*__real_close)(int fd);
+static void initialize(const e_syscall_t syscall)
+{
+	if (0 == init_done) {
+		norsim_init();
+		init_done = 1;
+	}
 
-static ssize_t (*__real_pread)(int fd, void *buf, size_t count, off_t offset);
-static ssize_t (*__real_pwrite)(int fd, const void *buf, size_t count, off_t offset);
-static ssize_t (*__real_read)(int fd, void *buf, size_t count);
-static ssize_t (*__real_write)(int fd, const void *buf, size_t count);
+	switch (syscall) {
+		case E_SYSCALL_OPEN:
+			if (!real_syscalls._open) {
+				real_syscalls._open = dlsym(RTLD_NEXT, "open");
+			}
+			break;
+		case E_SYSCALL_CLOSE:
+			if (!real_syscalls._close) {
+				real_syscalls._close = dlsym(RTLD_NEXT, "close");
+			}
+			break;
+		case E_SYSCALL_PREAD:
+			if (!real_syscalls._pread) {
+				real_syscalls._pread = dlsym(RTLD_NEXT, "pread");
+			}
+			break;
+		case E_SYSCALL_PWRITE:
+			if (!real_syscalls._pwrite) {
+				real_syscalls._pwrite = dlsym(RTLD_NEXT, "pwrite");
+			}
+			break;
+		case E_SYSCALL_READ:
+			if (!real_syscalls._read) {
+				real_syscalls._read = dlsym(RTLD_NEXT, "read");
+			}
+			break;
+		case E_SYSCALL_WRITE:
+			if (!real_syscalls._write) {
+				real_syscalls._write = dlsym(RTLD_NEXT, "write");
+			}
+			break;
+		case E_SYSCALL_IOCTL:
+			if (!real_syscalls._ioctl) {
+				real_syscalls._ioctl = dlsym(RTLD_NEXT, "ioctl");
+			}
+			break;
+	}
+}
 
-static int (*__real_ioctl)(int fd, unsigned long request, ...);
-
-__attribute__((constructor)) void init(void)
+static void norsim_init(void)
 {
 	char *env_loglevel;
 	char *env_size;
@@ -82,19 +127,6 @@ __attribute__((constructor)) void init(void)
 	struct stat st;
 
 	puts("Initializing norsim...");
-	/*
-	 * INITIALIZE LIB POINTERS
-	 */
-	// INITIALIZE WRAPPERS
-	__real_open = dlsym(RTLD_NEXT, "open");
-	__real_close = dlsym(RTLD_NEXT, "close");
-
-	__real_pread = dlsym(RTLD_NEXT, "pread");
-	__real_pwrite = dlsym(RTLD_NEXT, "pwrite");
-	__real_read = dlsym(RTLD_NEXT, "read");
-	__real_write = dlsym(RTLD_NEXT, "write");
-
-	__real_ioctl = dlsym(RTLD_NEXT, "ioctl");
 	/*
 	 * CHECK VARIABLES
 	 */
@@ -129,10 +161,12 @@ __attribute__((constructor)) void init(void)
 	// WEAK PAGES
 	if (NULL == (env_weak_pages = getenv(ENV_WEAK_PAGES))) {
 		PINF("No weak_pages given, assuming no weak pages\n");
+		env_weak_pages = empty_string;
 	}
 	// GRAVE PAGES
 	if (NULL == (env_grave_pages = getenv(ENV_GRAVE_PAGES))) {
 		PINF("No grave_pages given, assuming no grave pages\n");
+		env_grave_pages = empty_string;
 	}
 	// BIT-FLIPS
 	if (NULL == (env_bit_flips = getenv(ENV_BIT_FLIPS))) {
@@ -241,7 +275,7 @@ err:
 	exit(ERR_INIT_FAILED);
 }
 
-__attribute__((destructor)) void finish(void)
+__attribute__((destructor)) void norsim_finish(void)
 {
 	puts("Closing norsim...");
 	PALL(0, "Report:\n");
@@ -385,7 +419,7 @@ static void shutdown(void)
 
 static int parse_page_env(const char const *str, e_page_type_t type)
 {
-	char *cur_node = (char*)str;
+	const char *cur_node = str;
 	char *cur_prop;
 	char *end_node;
 	char *end_prop;
@@ -393,7 +427,7 @@ static int parse_page_env(const char const *str, e_page_type_t type)
 	unsigned cycles;
 	unsigned long page;
 
-	if (NULL == str)
+	if (0 == str[0])
 		return (0);
 
 	do {
@@ -444,19 +478,20 @@ inline static e_page_type_t get_page_type_by_index(unsigned index)
 // ---------------------------------------
 int open(const char *path, int oflag, ...)
 {
-	char buf[PATH_MAX + 1];
+	char realpath_buf[PATH_MAX + 1];
 	int errno_cpy;
 	int ret = -1;
 	va_list args;
 
-	realpath(path, buf);
+	initialize(E_SYSCALL_OPEN);
+	realpath(path, realpath_buf);
 	va_start(args, oflag);
-	if (0 != strcmp(buf, cache_file))
-		ret = __real_open(path, oflag, args);
+	if (0 != strcmp(realpath_buf, cache_file))
+		ret = real_syscalls._open(path, oflag, args);
 	else {
 		if (!initialized) {
 			pthread_mutex_lock(&mutex);
-			ret = __real_open(path, oflag, args);
+			ret = real_syscalls._open(path, oflag, args);
 			if (ret < 0) {
 				errno_cpy = errno;
 				PERR("Error while opening cache_file: %s, errno=%d\n", cache_file, errno_cpy);
@@ -492,12 +527,13 @@ int close(int fd)
 	int errno_cpy;
 	int ret = -1;
 
+	initialize(E_SYSCALL_CLOSE);
 	if (fd != cache_file_fd)
-		ret = __real_close(fd);
+		ret = real_syscalls._close(fd);
 	else {
 		if (initialized) {
 			pthread_mutex_lock(&mutex);
-			ret = __real_close(fd);
+			ret = real_syscalls._close(fd);
 			if (ret < 0) {
 				errno_cpy = errno;
 				PERR("Error while closing cache_file: %s, errno=%d\n", cache_file, errno_cpy);
@@ -529,8 +565,9 @@ ssize_t pread(int fd, void *buf, size_t count, off_t offset)
 	unsigned long index;
 	unsigned long index_in;
 
+	initialize(E_SYSCALL_PREAD);
 	if (fd != cache_file_fd)
-		ret = __real_pread(fd, buf, count, offset);
+		ret = real_syscalls._pread(fd, buf, count, offset);
 	else {
 		index = get_page_by_offset(offset);
 		switch (get_page_type_by_index(index)) {
@@ -540,7 +577,7 @@ ssize_t pread(int fd, void *buf, size_t count, off_t offset)
 				if (page_info[index].current_cycles < page_info[index].cycles) {
 					page_info[index].current_cycles++;
 					pthread_mutex_unlock(&mutex);
-					ret = __real_pread(fd, buf, count, offset);
+					ret = real_syscalls._pread(fd, buf, count, offset);
 				} else {
 					pthread_mutex_unlock(&mutex);
 					if (E_BEH_EIO == beh_grave) {
@@ -552,7 +589,7 @@ ssize_t pread(int fd, void *buf, size_t count, off_t offset)
 							PDBG("read block exceeds eraseblock size\n");
 							return (-1);
 						}
-						ret = __real_pread(fd, buf, count, offset);
+						ret = real_syscalls._pread(fd, buf, count, offset);
 						rnd = rand() % count;
 						rnd_byte = ((char*)buf)[rnd] ^ rnd;
 						PDBG("RND at page: %lu[%lu], expected: 0x%02X, is: 0x%02X\n", index, index_in + rnd, ((char*)buf)[rnd], rnd_byte & 0xFF);
@@ -565,7 +602,7 @@ ssize_t pread(int fd, void *buf, size_t count, off_t offset)
 				page_info[index].reads++;
 				pthread_mutex_unlock(&mutex);
 			default:
-				ret = __real_pread(fd, buf, count, offset);
+				ret = real_syscalls._pread(fd, buf, count, offset);
 		}
 	}
 	return (ret);
@@ -580,8 +617,9 @@ ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset)
 	unsigned long index;
 	unsigned long index_in;
 
+	initialize(E_SYSCALL_PWRITE);
 	if (fd != cache_file_fd)
-		ret = __real_pwrite(fd, buf, count, offset);
+		ret = real_syscalls._pwrite(fd, buf, count, offset);
 	else {
 		index = get_page_by_offset(offset);
 		switch (get_page_type_by_index(index)) {
@@ -591,7 +629,7 @@ ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset)
 				if (page_info[index].current_cycles < page_info[index].cycles) {
 					page_info[index].current_cycles++;
 					pthread_mutex_unlock(&mutex);
-					ret = __real_pwrite(fd, buf, count, offset);
+					ret = real_syscalls._pwrite(fd, buf, count, offset);
 				} else {
 					pthread_mutex_unlock(&mutex);
 					if (E_BEH_EIO == beh_weak) {
@@ -604,10 +642,10 @@ ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset)
 							return (-1);
 						}
 						rnd = rand() % count;
-						rnd_byte = ((char*)buf)[rnd] ^ rnd;
-						PDBG("RND at page: %lu[%lu], expected: 0x%02X, is: 0x%02X\n", index, index_in + rnd, ((char*)buf)[rnd], rnd_byte & 0xFF);
-						((char*)buf)[rnd] = rnd_byte & 0xFF;
-						ret = __real_pwrite(fd, buf, count, offset);
+						rnd_byte = ((const char*)buf)[rnd] ^ rnd;
+						PDBG("RND at page: %lu[%lu], expected: 0x%02X, is: 0x%02X\n", index, index_in + rnd, ((const char*)buf)[rnd], rnd_byte & 0xFF);
+						((char*)buf)[rnd] = (char)(rnd_byte & 0xFF);
+						ret = real_syscalls._pwrite(fd, buf, count, offset);
 					}
 				}
 				break;
@@ -616,7 +654,7 @@ ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset)
 				page_info[index].writes++;
 				pthread_mutex_unlock(&mutex);
 			default:
-				ret = __real_pwrite(fd, buf, count, offset);
+				ret = real_syscalls._pwrite(fd, buf, count, offset);
 		}
 	}
 	return (ret);
@@ -626,14 +664,16 @@ ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset)
 ssize_t read(int fd, void *buf, size_t count)
 {
 	// TODO: simplified version
-	return (__real_read(fd, buf, count));
+	initialize(E_SYSCALL_READ);
+	return (real_syscalls._read(fd, buf, count));
 }
 
 // -------------------------------------------------
 ssize_t write(int fd, const void *buf, size_t count)
 {
 	// TODO: simplified version
-	return (__real_write(fd, buf, count));
+	initialize(E_SYSCALL_WRITE);
+	return (real_syscalls._write(fd, buf, count));
 }
 
 // -------------------------------
@@ -642,9 +682,10 @@ int ioctl(int fd, unsigned long request, ...)
 	int ret = -1;
 	va_list args;
 
+	initialize(E_SYSCALL_IOCTL);
 	va_start(args, request);
 	if (fd != cache_file_fd)
-		ret = __real_ioctl(fd, request, args);
+		ret = real_syscalls._ioctl(fd, request, args);
 	else {
 		switch (request) {
 			case MEMGETINFO:
