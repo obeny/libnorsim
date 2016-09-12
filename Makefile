@@ -5,11 +5,12 @@ CC ?= gcc
 LIB_OBJS := libnorsim.o
 PRG_OBJS := main.o
 
-CFLAGS := -pipe -std=c11 -D_GNU_SOURCE
+CFLAGS := -pipe -std=c11 -D_GNU_SOURCE=1
 CFLAGS_LIB := -fPIC
-CFLAGS_WRN := -Wall -Wextra -Wno-unused-result
+CFLAGS_WRN := -Wall -Wextra -Wwrite-strings -Wbad-function-cast -Wshadow -Wpointer-arith -Wmissing-declarations -Wundef -Wunreachable-code -Wuninitialized -Wmissing-noreturn -Wmissing-braces -Winit-self -Wcast-align -Wnested-externs -Winline -Wredundant-decls -Wparentheses -Wmaybe-uninitialized -Wno-unused-result -Wno-missing-declarations
+#-Wcast-qual
 CFLAGS_DBG := -ggdb -O0
-CFLAGS_REL := -g0 -O2
+CFLAGS_REL := -g0 -O3
 CFLAGS_DEP := -MD -MP
 
 CFLAGS_LIBS := -ldl
@@ -30,6 +31,7 @@ CFLAGS += $(CFLAGS_WRN)
 CFLAGS += $(CFLAGS_LIBS)
 CFLAGS += $(CFLAGS_DEP)
 CFLAGS += -DVERSION=\"$(VERSION)\"
+CFLAGS += $(CFLAGS_CUSTOM)
 
 all : $(PRG) $(LIB)
 
@@ -37,8 +39,8 @@ $(LIB) : $(LIB_OBJS)
 		$(CC) $^ -o $(LIB).$(VERSION) $(CFLAGS) $(CFLAGS_LIB) -shared -Wl,-soname,$(LIB) -Wl,-soname,$(LIB).$(VERSION)
 		ln -snf $(LIB).$(VERSION) $(LIB)
 
-$(PRG) : $(PRG_OBJS) $(LIB)
-		$(CC) $^ -o $(PRG) $(CFLAGS) -L. -l$(LIB_NAME)
+$(PRG) : $(PRG_OBJS)
+		$(CC) $^ -o $(PRG) $(CFLAGS)
 
 clean :
 		find . -name "*.o" -o -name "*.d" -o -name "*.so.*" -o -name "*.so" | xargs rm -f
