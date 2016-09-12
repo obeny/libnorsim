@@ -38,8 +38,8 @@ $(PRG) : $(PRG_OBJS) $(LIB)
 		$(CC) $^ -o $(PRG) $(CFLAGS) -L. -l$(LIB_NAME)
 
 clean :
-		find . -name "*.o" -o -name "*.d" | xargs rm -f
-		rm -f $(PRG) $(LIB)
+		find . -name "*.o" -o -name "*.d" -o -name "*.so.*" | xargs rm -f
+		rm -f $(PRG)
 
 $(LIB_OBJS) : %.o : %.c
 		$(CC) -c $< -o $@ $(CFLAGS) $(CFLAGS_LIB)
