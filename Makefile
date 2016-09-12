@@ -32,7 +32,7 @@ all : $(PRG) $(LIB)
 
 $(LIB) : $(LIB_OBJS)
 		$(CC) $^ -o $(LIB).$(VERSION) $(CFLAGS) $(CFLAGS_LIB) -shared -Wl,-soname,$(LIB) -Wl,-soname,$(LIB).$(VERSION)
-		ln -s $(LIB).$(VERSION) $(LIB)
+		ln -snf $(LIB).$(VERSION) $(LIB)
 
 $(PRG) : $(PRG_OBJS) $(LIB)
 		$(CC) $^ -o $(PRG) $(CFLAGS) -L. -l$(LIB_NAME)
