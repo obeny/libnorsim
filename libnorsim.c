@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <pthread.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -25,6 +26,8 @@
 #include <mtd/mtd-user.h>
 
 #include "libnorsim.h"
+
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static char cache_file_realpath[PATH_MAX + 1];
 
@@ -302,6 +305,7 @@ static void usage(void)
 
 static void report_pages(void)
 {
+	pthread_mutex_lock(&mutex);
 	for (unsigned i = 0; i < pages; ++i) {
 		if (E_PAGE_NORMAL != page_info[i].type) {
 			PALL(0, "Page\t%u:\t", i);
@@ -329,6 +333,7 @@ static void report_pages(void)
 			}
 		}
 	}
+	pthread_mutex_unlock(&mutex);
 }
 
 static void report_stats(void)
@@ -337,6 +342,7 @@ static void report_stats(void)
 	memset (&weak, 0x00, sizeof(weak));
 	memset (&grave, 0x00, sizeof(grave));
 
+	pthread_mutex_lock(&mutex);
 	for (unsigned i = 0; i < pages; ++i) {
 		if (E_PAGE_NORMAL != page_info[i].type) {
 			switch (page_info[i].type) {
@@ -355,6 +361,7 @@ static void report_stats(void)
 			}
 		}
 	}
+	pthread_mutex_unlock(&mutex);
 
 	PALL(0, "WEAK pages:\n");
 	PALL(0, "\tmin reads:  %lu\n", weak.min_reads);
@@ -422,7 +429,13 @@ inline static unsigned get_page_by_offset(off_t offset)
 
 inline static e_page_type_t get_page_type_by_index(unsigned index)
 {
-	return (page_info[index].type);
+	e_page_type_t type;
+
+	pthread_mutex_lock(&mutex);
+	type = page_info[index].type;
+	pthread_mutex_unlock(&mutex);
+
+	return (type);
 }
 
 /*
@@ -442,6 +455,7 @@ int open(const char *path, int oflag, ...)
 		ret = __real_open(path, oflag, args);
 	else {
 		if (!initialized) {
+			pthread_mutex_lock(&mutex);
 			ret = __real_open(path, oflag, args);
 			if (ret < 0) {
 				errno_cpy = errno;
@@ -456,6 +470,7 @@ int open(const char *path, int oflag, ...)
 			}
 			PALL(1, "Opened cache_file: %s\n", cache_file);
 			initialized = 1;
+			pthread_mutex_unlock(&mutex);
 		} else {
 			PERR("Couldn't re-open cache_file in use: %s\n", cache_file);
 			goto err;
@@ -466,6 +481,7 @@ int open(const char *path, int oflag, ...)
 
 err:
 	va_end(args);
+	pthread_mutex_unlock(&mutex);
 	shutdown();
 	return (-1);
 }
@@ -480,6 +496,7 @@ int close(int fd)
 		ret = __real_close(fd);
 	else {
 		if (initialized) {
+			pthread_mutex_lock(&mutex);
 			ret = __real_close(fd);
 			if (ret < 0) {
 				errno_cpy = errno;
@@ -489,6 +506,7 @@ int close(int fd)
 			PALL(1, "Closed cache_file: %s\n", cache_file);
 			initialized = 0;
 			cache_file_fd = -1;
+			pthread_mutex_unlock(&mutex);
 		} else {
 			PERR("Couldn't close uninitialized cache_file: %s\n", cache_file);
 			goto err;
@@ -497,6 +515,7 @@ int close(int fd)
 	return (ret);
 
 err:
+	pthread_mutex_unlock(&mutex);
 	shutdown();
 	return (-1);
 }
@@ -516,11 +535,14 @@ ssize_t pread(int fd, void *buf, size_t count, off_t offset)
 		index = get_page_by_offset(offset);
 		switch (get_page_type_by_index(index)) {
 			case E_PAGE_GRAVE:
+				pthread_mutex_lock(&mutex);
 				page_info[index].reads++;
 				if (page_info[index].current_cycles < page_info[index].cycles) {
 					page_info[index].current_cycles++;
+					pthread_mutex_unlock(&mutex);
 					ret = __real_pread(fd, buf, count, offset);
 				} else {
+					pthread_mutex_unlock(&mutex);
 					if (E_BEH_EIO == beh_grave) {
 						PDBG("EIO at page: %u\n", index);
 						ret = -1;
@@ -539,7 +561,9 @@ ssize_t pread(int fd, void *buf, size_t count, off_t offset)
 				}
 				break;
 			case E_PAGE_WEAK:
+				pthread_mutex_lock(&mutex);
 				page_info[index].reads++;
+				pthread_mutex_unlock(&mutex);
 			default:
 				ret = __real_pread(fd, buf, count, offset);
 		}
@@ -562,11 +586,14 @@ ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset)
 		index = get_page_by_offset(offset);
 		switch (get_page_type_by_index(index)) {
 			case E_PAGE_WEAK:
+				pthread_mutex_lock(&mutex);
 				page_info[index].writes++;
 				if (page_info[index].current_cycles < page_info[index].cycles) {
 					page_info[index].current_cycles++;
+					pthread_mutex_unlock(&mutex);
 					ret = __real_pwrite(fd, buf, count, offset);
 				} else {
+					pthread_mutex_unlock(&mutex);
 					if (E_BEH_EIO == beh_weak) {
 						PDBG("EIO at page: %u\n", index);
 						ret = -1;
@@ -585,7 +612,9 @@ ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset)
 				}
 				break;
 			case E_PAGE_GRAVE:
+				pthread_mutex_lock(&mutex);
 				page_info[index].writes++;
+				pthread_mutex_unlock(&mutex);
 			default:
 				ret = __real_pwrite(fd, buf, count, offset);
 		}
