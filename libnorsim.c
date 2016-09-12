@@ -1,9 +1,8 @@
 // TODO:
-// func wrappers (ioctl: MEMINFO, UNLOCK, ERASE)
-// random
 // synch
+// random
 // improve exit
-// bit-flips
+// bit-flips ??
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -18,9 +17,12 @@
 #include <limits.h>
 #include <signal.h>
 
+#include <sys/ioctl.h>
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+
+#include <mtd/mtd-user.h>
 
 #include "libnorsim.h"
 
@@ -41,6 +43,8 @@ static off_t cache_file_size;
 static e_beh_t beh_weak;
 static e_beh_t beh_grave;
 
+static mtd_info_t mtd_info;
+
 static void sig_handler_USR1(int signum);
 static void usage(void);
 static void report_pages(void);
@@ -51,15 +55,15 @@ static int parse_page_env(const char const *str, e_page_type_t type);
 inline static unsigned get_page_by_offset(off_t offset);
 inline static e_page_type_t get_page_type_by_index(unsigned index);
 
-static int (*__real_open)(const char *path, int oflag, ...) = NULL;
-static int (*__real_close)(int fd) = NULL;
+static int (*__real_open)(const char *path, int oflag, ...);
+static int (*__real_close)(int fd);
 
-static ssize_t (*__real_pread)(int fd, void *buf, size_t count, off_t offset) = NULL;
-static ssize_t (*__real_pwrite)(int fd, const void *buf, size_t count, off_t offset) = NULL;
-static ssize_t (*__real_read)(int fd, void *buf, size_t count) = NULL;
-static ssize_t (*__real_write)(int fd, const void *buf, size_t count) = NULL;
+static ssize_t (*__real_pread)(int fd, void *buf, size_t count, off_t offset);
+static ssize_t (*__real_pwrite)(int fd, const void *buf, size_t count, off_t offset);
+static ssize_t (*__real_read)(int fd, void *buf, size_t count);
+static ssize_t (*__real_write)(int fd, const void *buf, size_t count);
 
-static int (*__real_ioctl)(int d, int request, ...) = NULL;
+static int (*__real_ioctl)(int fd, unsigned long request, ...);
 
 __attribute__((constructor)) void init(void)
 {
@@ -211,6 +215,14 @@ __attribute__((constructor)) void init(void)
 
 	// SIGNAL HANDLING
 	signal(SIGUSR1, sig_handler_USR1);
+	// INITIALIZING MTD INFO
+	mtd_info.type = MTD_NORFLASH;
+	mtd_info.flags = MTD_CAP_NORFLASH;
+	mtd_info.size = size;
+	mtd_info.erasesize = erase_size;
+	mtd_info.writesize = 1;
+	mtd_info.oobsize = 0;
+
 	// END
 	puts("Init OK!");
 	return;
@@ -596,14 +608,40 @@ ssize_t write(int fd, const void *buf, size_t count)
 }
 
 // -------------------------------
-int ioctl(int d, int request, ...)
+int ioctl(int fd, unsigned long request, ...)
 {
-	// TODO: simplified version
-	int ret;
+	int ret = -1;
 	va_list args;
 
 	va_start(args, request);
-	ret = __real_ioctl(d, request, args);
+	if (fd != cache_file_fd)
+		ret = __real_ioctl(fd, request, args);
+	else {
+		switch (request) {
+			case MEMGETINFO:
+				ret = 0;
+				mtd_info_t *mi = va_arg(args, mtd_info_t*);
+				memcpy(mi, &mtd_info, sizeof(mtd_info));
+				PDBG("got MEMGETINFO request\n");
+				break;
+			case MEMUNLOCK:
+			case MEMERASE:
+				if (MEMUNLOCK == request)
+					PDBG("got MEMUNLOCK request\n");
+				else if (MEMERASE == request)
+					PDBG("got MEMERASE request\n");
+
+				erase_info_t *ei = va_arg(args, erase_info_t*);
+				if ((0 != (ei->start % erase_size) || 0 != (ei->length % erase_size))) {
+					ret = -1;
+					PINF("erase_info_t invalid, start=0x%04lx, length=0x%04lx\n", (unsigned long)ei->start, (unsigned long)ei->length);
+				}
+				else
+					ret = 0;
+			default:
+				break;
+		}
+	}
 	va_end(args);
 
 	return (ret);
