@@ -109,6 +109,7 @@ typedef struct
 	unsigned long reads;
 	unsigned long writes;
 	unsigned long erases;
+	unsigned unlocked;
 } st_page_t;
 
 typedef struct
@@ -130,5 +131,13 @@ typedef struct {
 	write_ptr_t _write;
 	ioctl_ptr_t _ioctl;
 } st_syscalls_t;
+
+void initialize(const e_syscall_t syscall);
+__attribute__((noreturn)) void shutdown(void);
+
+unsigned get_page_by_offset(off_t offset);
+e_page_type_t get_page_type_by_index(unsigned index);
+
+void report(void);
 
 #endif // __LIBNORSIM_H__

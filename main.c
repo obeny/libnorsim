@@ -73,5 +73,8 @@ int main(void)
 	ret = ioctl(fd, MEMERASE, &ei);
 	printf("ret=%d\n", ret);
 
+	ret = ioctl(fd, MEMERASE, &ei);
+	printf("ret=%d\n", ret);
+
 	close(fd);
 }
