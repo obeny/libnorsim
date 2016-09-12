@@ -7,7 +7,6 @@
 #define ENV_ERASE_SIZE  "NS_ERASE_SIZE"
 #define ENV_WEAK_PAGES  "NS_WEAK_PAGES"
 #define ENV_GRAVE_PAGES "NS_GRAVE_PAGES"
-#define ENV_BIT_FLIPS   "NS_BIT_FLIPS"
 
 #define ERR_INIT_FAILED     (-1)
 #define ERR_NOT_INITIALIZED (-2)
@@ -88,8 +87,7 @@ typedef enum
 {
 	E_PAGE_NORMAL = 0,
 	E_PAGE_WEAK,
-	E_PAGE_GRAVE,
-	E_PAGE_BIT_FLIP
+	E_PAGE_GRAVE
 } e_page_type_t;
 
 typedef enum

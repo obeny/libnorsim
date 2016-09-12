@@ -1,10 +1,7 @@
 // TODO:
 // normal pages report
-// empty_string
-// sighandler
 // random
 // improve exit
-// bit-flips ??
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -33,8 +30,6 @@ pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static char cache_file_realpath[PATH_MAX + 1];
 
-static char empty_string[1];
-
 static char *cache_file;
 static unsigned loglevel = E_LOGLEVEL_INFO;
 static unsigned long pages;
@@ -43,6 +38,8 @@ static unsigned long erase_size;
 
 static int initialized;
 static int init_done;
+static int report_requested;
+
 static st_page_t *page_info;
 
 static int cache_file_fd = -1;
@@ -58,6 +55,7 @@ static st_syscalls_t real_syscalls;
 static void norsim_init(void);
 static void sig_handler_USR1(int signum);
 static void usage(void);
+static void report(void);
 static void report_pages(void);
 static void report_stats(void);
 static void shutdown(void);
@@ -120,7 +118,6 @@ static void norsim_init(void)
 
 	char *env_weak_pages;
 	char *env_grave_pages;
-	char *env_bit_flips;
 
 	int res = 0;
 
@@ -161,19 +158,13 @@ static void norsim_init(void)
 	// WEAK PAGES
 	if (NULL == (env_weak_pages = getenv(ENV_WEAK_PAGES))) {
 		PINF("No weak_pages given, assuming no weak pages\n");
-		env_weak_pages = empty_string;
 	}
 	// GRAVE PAGES
 	if (NULL == (env_grave_pages = getenv(ENV_GRAVE_PAGES))) {
 		PINF("No grave_pages given, assuming no grave pages\n");
-		env_grave_pages = empty_string;
-	}
-	// BIT-FLIPS
-	if (NULL == (env_bit_flips = getenv(ENV_BIT_FLIPS))) {
-		PINF("No bit_flips given, assuming no bit-flips\n");
 	}
 	// NO FAULTS
-	if (!env_weak_pages && !env_grave_pages && !env_bit_flips)
+	if (!env_weak_pages && !env_grave_pages)
 		PINF("No failure types defined, no faults will be forwareded to user program\n");
 	// CALCULATE PAGES
 	pages = size / erase_size;
@@ -189,47 +180,53 @@ static void norsim_init(void)
 	memset(page_info, 0x00, sizeof(st_page_t) * pages);
 
 	// WEAK PAGES
-	if (0 == strncmp(env_weak_pages, PARSE_BEH_EIO, PARSE_BEH_LEN))
-	{
-		beh_weak = E_BEH_EIO;
-		PALL(1, "SET weak behavior:\t%s\n", PARSE_BEH_EIO);
-		env_weak_pages = strchr(env_weak_pages, PARSE_PREFIX_DELIM) + 1;
-	}
-	else if (0 == strncmp(env_weak_pages, PARSE_BEH_RND, PARSE_BEH_LEN))
-	{
-		beh_weak = E_BEH_RND;
-		PALL(1, "SET weak behavior:\t%s\n", PARSE_BEH_RND);
-		env_weak_pages = strchr(env_weak_pages, PARSE_PREFIX_DELIM) + 1;
-	}
-	else {
-		beh_weak = E_BEH_EIO;
-		PINF("No weak pages behavior defined, assuming eio\n");
-	}
-	if ((res = parse_page_env(env_weak_pages, E_PAGE_WEAK)) < 0) {
-		PERR("Couldn't parse " ENV_WEAK_PAGES "!\n");
-		goto err;
+	res = 0;
+	if (NULL != env_weak_pages) {
+		if (0 == strncmp(env_weak_pages, PARSE_BEH_EIO, PARSE_BEH_LEN))
+		{
+			beh_weak = E_BEH_EIO;
+			PALL(1, "SET weak behavior:\t%s\n", PARSE_BEH_EIO);
+			env_weak_pages = strchr(env_weak_pages, PARSE_PREFIX_DELIM) + 1;
+		}
+		else if (0 == strncmp(env_weak_pages, PARSE_BEH_RND, PARSE_BEH_LEN))
+		{
+			beh_weak = E_BEH_RND;
+			PALL(1, "SET weak behavior:\t%s\n", PARSE_BEH_RND);
+			env_weak_pages = strchr(env_weak_pages, PARSE_PREFIX_DELIM) + 1;
+		}
+		else {
+			beh_weak = E_BEH_EIO;
+			PINF("No weak pages behavior defined, assuming eio\n");
+		}
+		if ((res = parse_page_env(env_weak_pages, E_PAGE_WEAK)) < 0) {
+			PERR("Couldn't parse " ENV_WEAK_PAGES "!\n");
+			goto err;
+		}
 	}
 	PALL(1, "SET weak pages:\t\t%d\n", res);
 	// GRAVE PAGES
-	if (0 == strncmp(env_grave_pages, PARSE_BEH_EIO, PARSE_BEH_LEN))
-	{
-		beh_grave = E_BEH_EIO;
-		PALL(1, "SET grave behavior:\t%s\n", PARSE_BEH_EIO);
-		env_grave_pages = strchr(env_grave_pages, PARSE_PREFIX_DELIM) + 1;
-	}
-	else if (0 == strncmp(env_grave_pages, PARSE_BEH_RND, PARSE_BEH_LEN))
-	{
-		beh_grave = E_BEH_RND;
-		PALL(1, "SET grave behavior:\t%s\n", PARSE_BEH_RND);
-		env_grave_pages = strchr(env_grave_pages, PARSE_PREFIX_DELIM) + 1;
-	}
-	else {
-		beh_grave = E_BEH_EIO;
-		PINF("No grave pages behavior defined, assuming eio\n");
-	}
-	if ((res = parse_page_env(env_grave_pages, E_PAGE_GRAVE)) < 0) {
-		PERR("Couldn't parse " ENV_GRAVE_PAGES "!\n");
-		goto err;
+	res = 0;
+	if (NULL != env_grave_pages) {
+		if (0 == strncmp(env_grave_pages, PARSE_BEH_EIO, PARSE_BEH_LEN))
+		{
+			beh_grave = E_BEH_EIO;
+			PALL(1, "SET grave behavior:\t%s\n", PARSE_BEH_EIO);
+			env_grave_pages = strchr(env_grave_pages, PARSE_PREFIX_DELIM) + 1;
+		}
+		else if (0 == strncmp(env_grave_pages, PARSE_BEH_RND, PARSE_BEH_LEN))
+		{
+			beh_grave = E_BEH_RND;
+			PALL(1, "SET grave behavior:\t%s\n", PARSE_BEH_RND);
+			env_grave_pages = strchr(env_grave_pages, PARSE_PREFIX_DELIM) + 1;
+		}
+		else {
+			beh_grave = E_BEH_EIO;
+			PINF("No grave pages behavior defined, assuming eio\n");
+		}
+		if ((res = parse_page_env(env_grave_pages, E_PAGE_GRAVE)) < 0) {
+			PERR("Couldn't parse " ENV_GRAVE_PAGES "!\n");
+			goto err;
+		}
 	}
 	PALL(1, "SET grave pages:\t%d\n", res);
 
@@ -294,22 +291,8 @@ __attribute__((destructor)) void norsim_finish(void)
 
 static void sig_handler_USR1(int signum)
 {
-	time_t cur_time = time(NULL);
-	struct tm *date_info = localtime(&cur_time);
-
-	if (SIGUSR1 == signum) {
-		if (!initialized) {
-			PALL(0, "Not initialized, no info available\n");
-			return;
-		} else {
-			PALL(0, "\n");
-			PALL(0, asctime(date_info));
-			PALL(0, "Report:\n");
-			report_pages();
-			PALL(0, "Stats:\n");
-			report_stats();
-		}
-	}
+	if (SIGUSR1 == signum)
+		report_requested = 1;
 }
 
 static void usage(void)
@@ -323,9 +306,8 @@ static void usage(void)
 	puts("\t" ENV_ERASE_SIZE  ":\tsize of erase page (decimal number in kBytes");
 	puts("\t" ENV_WEAK_PAGES  ":\tpages marked as weak (see format description)");
 	puts("\t" ENV_GRAVE_PAGES ":\tpages marked as grave (see format description)");
-	puts("\t" ENV_BIT_FLIPS   ":\tpages marked to allow bit-flips (see format description)");
 	puts("");
-	puts("format used by weak, grave pages and bit-flips:");
+	puts("format used by weak and grave pages:");
 	puts("\t(<page_number>,<cycles>;)+");
 	puts("example:");
 	puts("\t1,3;1024,10; - page 1 and 1024 will be marked as weak with 3 and 10 cycles accordingly");
@@ -333,7 +315,27 @@ static void usage(void)
 	puts("failure types:");
 	puts("weak:     page will store random data after given amount of cycles");
 	puts("grave:    page can't be read after given amount of cycles, random data will be read");
-	puts("bit-flip: allow given amount bit-flips while reading page");
+}
+
+static void report(void)
+{
+	time_t cur_time = time(NULL);
+	struct tm *date_info = localtime(&cur_time);
+
+	if (report_requested) {
+		if (!initialized) {
+			PALL(0, "Not initialized, no info available\n");
+			return;
+		} else {
+			PALL(0, "\n");
+			PALL(0, asctime(date_info));
+			PALL(0, "Report:\n");
+			report_pages();
+			PALL(0, "Stats:\n");
+			report_stats();
+		}
+	}
+	report_requested = 0;
 }
 
 static void report_pages(void)
@@ -483,6 +485,7 @@ int open(const char *path, int oflag, ...)
 	int ret = -1;
 	va_list args;
 
+	report();
 	initialize(E_SYSCALL_OPEN);
 	realpath(path, realpath_buf);
 	va_start(args, oflag);
@@ -527,6 +530,7 @@ int close(int fd)
 	int errno_cpy;
 	int ret = -1;
 
+	report();
 	initialize(E_SYSCALL_CLOSE);
 	if (fd != cache_file_fd)
 		ret = real_syscalls._close(fd);
@@ -565,6 +569,7 @@ ssize_t pread(int fd, void *buf, size_t count, off_t offset)
 	unsigned long index;
 	unsigned long index_in;
 
+	report();
 	initialize(E_SYSCALL_PREAD);
 	if (fd != cache_file_fd)
 		ret = real_syscalls._pread(fd, buf, count, offset);
@@ -617,6 +622,7 @@ ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset)
 	unsigned long index;
 	unsigned long index_in;
 
+	report();
 	initialize(E_SYSCALL_PWRITE);
 	if (fd != cache_file_fd)
 		ret = real_syscalls._pwrite(fd, buf, count, offset);
@@ -664,6 +670,7 @@ ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset)
 ssize_t read(int fd, void *buf, size_t count)
 {
 	// TODO: simplified version
+	report();
 	initialize(E_SYSCALL_READ);
 	return (real_syscalls._read(fd, buf, count));
 }
@@ -672,6 +679,7 @@ ssize_t read(int fd, void *buf, size_t count)
 ssize_t write(int fd, const void *buf, size_t count)
 {
 	// TODO: simplified version
+	report();
 	initialize(E_SYSCALL_WRITE);
 	return (real_syscalls._write(fd, buf, count));
 }
@@ -682,6 +690,7 @@ int ioctl(int fd, unsigned long request, ...)
 	int ret = -1;
 	va_list args;
 
+	report();
 	initialize(E_SYSCALL_IOCTL);
 	va_start(args, request);
 	if (fd != cache_file_fd)
