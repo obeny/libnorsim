@@ -55,9 +55,6 @@ do { \
 	} \
 } while (0)
 
-#define get_min(a,b) ((b<a)?b:a)
-#define get_max(a,b) ((b>a)?b:a)
-
 #define STATS_FILL(t,a,op) t.a##_##op = get_##a(t.a##_##op,page_info[i].op)
 
 typedef int (*open_ptr_t)(const char *path, int oflag, ...);
@@ -137,6 +134,9 @@ __attribute__((noreturn)) void norsim_shutdown(void);
 
 unsigned get_page_by_offset(off_t offset);
 e_page_type_t get_page_type_by_index(unsigned index);
+
+unsigned long get_min(unsigned long g, unsigned long p);
+unsigned long get_max(unsigned long g, unsigned long p);
 
 void report(void);
 

@@ -7,6 +7,17 @@ extern pthread_mutex_t mutex;
 extern st_page_t *page_info;
 extern unsigned long erase_size;
 
+unsigned long get_min(unsigned long g, unsigned long p)
+{
+	unsigned long t = (0 != p);
+	return ((t<=g)?(t):(g));
+}
+
+unsigned long get_max(unsigned long g, unsigned long p)
+{
+	return ((p>g)?(p):(g));
+}
+
 unsigned get_page_by_offset(off_t offset)
 {
 	return (offset/erase_size);

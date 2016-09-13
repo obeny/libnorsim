@@ -292,19 +292,31 @@ static void report_stats(void)
 	for (unsigned i = 0; i < pages; ++i) {
 		switch (page_info[i].type) {
 			case E_PAGE_NORMAL:
-				STATS_FILL(normal,min,reads); STATS_FILL(normal,max,reads);
-				STATS_FILL(normal,min,writes); STATS_FILL(normal,max,writes);
-				STATS_FILL(normal,min,erases); STATS_FILL(normal,max,erases);
+				STATS_FILL(normal,max,reads); STATS_FILL(normal,max,writes); STATS_FILL(normal,max,erases);
 				break;
 			case E_PAGE_WEAK:
-				STATS_FILL(weak,min,reads); STATS_FILL(weak,max,reads);
-				STATS_FILL(weak,min,writes); STATS_FILL(weak,max,writes);
-				STATS_FILL(weak,min,erases); STATS_FILL(weak,max,erases);
+				STATS_FILL(weak,max,reads); STATS_FILL(weak,max,writes); STATS_FILL(weak,max,erases);
 				break;
 			case E_PAGE_GRAVE:
-				STATS_FILL(grave,min,reads); STATS_FILL(grave,max,reads);
-				STATS_FILL(grave,min,writes); STATS_FILL(grave,max,writes);
-				STATS_FILL(grave,min,erases); STATS_FILL(grave,max,erases);
+				STATS_FILL(grave,max,reads); STATS_FILL(grave,max,writes); STATS_FILL(grave,max,erases);
+				break;
+			default:
+				break;
+		}
+	}
+	normal.min_reads = normal.max_reads; normal.min_writes = normal.max_writes; normal.min_erases = normal.max_erases;
+	weak.min_reads = weak.max_reads; weak.min_writes = weak.max_writes; weak.min_erases = weak.max_erases;
+	grave.min_reads = grave.max_reads; grave.min_writes = grave.max_writes; grave.min_erases = grave.max_erases;
+	for (unsigned i = 0; i < pages; ++i) {
+		switch (page_info[i].type) {
+			case E_PAGE_NORMAL:
+				STATS_FILL(normal,min,reads); STATS_FILL(normal,min,writes); STATS_FILL(normal,min,erases);
+				break;
+			case E_PAGE_WEAK:
+				STATS_FILL(weak,min,reads); STATS_FILL(weak,min,writes); STATS_FILL(weak,min,erases);
+				break;
+			case E_PAGE_GRAVE:
+				STATS_FILL(grave,min,reads); STATS_FILL(grave,min,writes); STATS_FILL(grave,min,erases);
 				break;
 			default:
 				break;
@@ -318,21 +330,21 @@ static void report_stats(void)
 	PALL(0, "\tmin writes: %lu\n", normal.min_writes);
 	PALL(0, "\tmax writes: %lu\n", normal.max_writes);
 	PALL(0, "\tmin erases: %lu\n", normal.min_erases);
-	PALL(0, "\tmin erases: %lu\n", normal.max_erases);
+	PALL(0, "\tmax erases: %lu\n", normal.max_erases);
 	PALL(0, "WEAK pages:\n");
 	PALL(0, "\tmin reads:  %lu\n", weak.min_reads);
 	PALL(0, "\tmax reads:  %lu\n", weak.max_reads);
 	PALL(0, "\tmin writes: %lu\n", weak.min_writes);
 	PALL(0, "\tmax writes: %lu\n", weak.max_writes);
 	PALL(0, "\tmin erases: %lu\n", weak.min_erases);
-	PALL(0, "\tmin erases: %lu\n", weak.max_erases);
+	PALL(0, "\tmax erases: %lu\n", weak.max_erases);
 	PALL(0, "GRAVE pages:\n");
 	PALL(0, "\tmin reads:  %lu\n", grave.min_reads);
 	PALL(0, "\tmax reads:  %lu\n", grave.max_reads);
 	PALL(0, "\tmin writes: %lu\n", grave.min_writes);
 	PALL(0, "\tmax writes: %lu\n", grave.max_writes);
 	PALL(0, "\tmin erases: %lu\n", grave.min_erases);
-	PALL(0, "\tmin erases: %lu\n", grave.max_erases);
+	PALL(0, "\tmax erases: %lu\n", grave.max_erases);
 }
 
 static int parse_page_env(const char * const str, e_page_type_t type)
