@@ -132,8 +132,8 @@ typedef struct {
 	ioctl_ptr_t _ioctl;
 } st_syscalls_t;
 
-void initialize(const e_syscall_t syscall);
-__attribute__((noreturn)) void shutdown(void);
+void norsim_init(void);
+__attribute__((noreturn)) void norsim_shutdown(void);
 
 unsigned get_page_by_offset(off_t offset);
 e_page_type_t get_page_type_by_index(unsigned index);

@@ -12,7 +12,6 @@
 #include <time.h>
 #include <unistd.h>
 
-#include <dlfcn.h>
 #include <limits.h>
 #include <signal.h>
 
@@ -41,12 +40,10 @@ static char cache_file_realpath[PATH_MAX + 1];
 static unsigned long pages;
 static unsigned long size;
 
-static int init_done;
 static int report_requested;
 
 static unsigned long cache_file_size;
 
-static void norsim_init(void);
 static void sig_handler_USR1(int signum);
 static void usage(void);
 static void report_pages(int detailed);
@@ -56,58 +53,7 @@ static int parse_page_env_type(char* env_val, const char* const env_name,
 	const char* const name, e_beh_t * const beh, const e_page_type_t type);
 static void mtd_info_init(mtd_info_t *info);
 
-void initialize(const e_syscall_t syscall)
-{
-	if (0 == init_done) {
-		norsim_init();
-		init_done = 1;
-	}
-
-	switch (syscall) {
-		case E_SYSCALL_OPEN:
-			if (!real_syscalls._open) {
-				real_syscalls._open = dlsym(RTLD_NEXT, "open");
-			}
-			break;
-		case E_SYSCALL_CLOSE:
-			if (!real_syscalls._close) {
-				real_syscalls._close = dlsym(RTLD_NEXT, "close");
-			}
-			break;
-		case E_SYSCALL_PREAD:
-			if (!real_syscalls._pread) {
-				real_syscalls._pread = dlsym(RTLD_NEXT, "pread");
-			}
-			break;
-		case E_SYSCALL_PWRITE:
-			if (!real_syscalls._pwrite) {
-				real_syscalls._pwrite = dlsym(RTLD_NEXT, "pwrite");
-			}
-			break;
-		case E_SYSCALL_READ:
-			if (!real_syscalls._read) {
-				real_syscalls._read = dlsym(RTLD_NEXT, "read");
-			}
-			break;
-		case E_SYSCALL_WRITE:
-			if (!real_syscalls._write) {
-				real_syscalls._write = dlsym(RTLD_NEXT, "write");
-			}
-			break;
-		case E_SYSCALL_IOCTL:
-			if (!real_syscalls._ioctl) {
-				real_syscalls._ioctl = dlsym(RTLD_NEXT, "ioctl");
-			}
-			break;
-	}
-}
-
-__attribute__((noreturn)) void shutdown(void)
-{
-	exit(ERR_NOT_INITIALIZED);
-}
-
-static void norsim_init(void)
+void norsim_init(void)
 {
 	char *env_loglevel;
 	char *env_size;
@@ -215,6 +161,11 @@ err:
 	usage();
 	puts("Init Failed!");
 	exit(ERR_INIT_FAILED);
+}
+
+__attribute__((noreturn)) void norsim_shutdown(void)
+{
+	exit(ERR_NOT_INITIALIZED);
 }
 
 __attribute__((destructor)) void norsim_finish(void)
@@ -464,18 +415,3 @@ static void mtd_info_init(mtd_info_t *info)
 	info->oobsize = 0;
 }
 
-unsigned get_page_by_offset(off_t offset)
-{
-	return (offset/erase_size);
-}
-
-e_page_type_t get_page_type_by_index(unsigned index)
-{
-	e_page_type_t type;
-
-	pthread_mutex_lock(&mutex);
-	type = page_info[index].type;
-	pthread_mutex_unlock(&mutex);
-
-	return (type);
-}

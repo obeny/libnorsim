@@ -5,6 +5,7 @@
 #include <pthread.h>
 #include <unistd.h>
 
+#include <dlfcn.h>
 #include <errno.h>
 #include <limits.h>
 
@@ -29,6 +30,47 @@ extern int cache_file_fd;
 extern unsigned loglevel;
 extern unsigned long erase_size;
 
+static int syscall_init_done;
+
+static void initialize_syscall(const e_syscall_t syscall)
+{
+	if (0 == syscall_init_done) {
+		norsim_init();
+		syscall_init_done = 1;
+	}
+
+	switch (syscall) {
+		case E_SYSCALL_OPEN:
+			if (!real_syscalls._open)
+				real_syscalls._open = dlsym(RTLD_NEXT, "open");
+			break;
+		case E_SYSCALL_CLOSE:
+			if (!real_syscalls._close)
+				real_syscalls._close = dlsym(RTLD_NEXT, "close");
+			break;
+		case E_SYSCALL_PREAD:
+			if (!real_syscalls._pread)
+				real_syscalls._pread = dlsym(RTLD_NEXT, "pread");
+			break;
+		case E_SYSCALL_PWRITE:
+			if (!real_syscalls._pwrite)
+				real_syscalls._pwrite = dlsym(RTLD_NEXT, "pwrite");
+			break;
+		case E_SYSCALL_READ:
+			if (!real_syscalls._read)
+				real_syscalls._read = dlsym(RTLD_NEXT, "read");
+			break;
+		case E_SYSCALL_WRITE:
+			if (!real_syscalls._write)
+				real_syscalls._write = dlsym(RTLD_NEXT, "write");
+			break;
+		case E_SYSCALL_IOCTL:
+			if (!real_syscalls._ioctl)
+				real_syscalls._ioctl = dlsym(RTLD_NEXT, "ioctl");
+			break;
+	}
+}
+
 // ---------------------------------------
 int open(const char *path, int oflag, ...)
 {
@@ -38,7 +80,7 @@ int open(const char *path, int oflag, ...)
 	va_list args;
 
 	report();
-	initialize(E_SYSCALL_OPEN);
+	initialize_syscall(E_SYSCALL_OPEN);
 	va_start(args, oflag);
 	if ((NULL != realpath(path, realpath_buf)) && (0 != strcmp(realpath_buf, cache_file)))
 		ret = real_syscalls._open(path, oflag, args);
@@ -71,7 +113,7 @@ int open(const char *path, int oflag, ...)
 err:
 	va_end(args);
 	pthread_mutex_unlock(&mutex);
-	shutdown();
+	norsim_shutdown();
 	return (-1);
 }
 
@@ -82,7 +124,7 @@ int close(int fd)
 	int ret = -1;
 
 	report();
-	initialize(E_SYSCALL_CLOSE);
+	initialize_syscall(E_SYSCALL_CLOSE);
 	if (fd != cache_file_fd)
 		ret = real_syscalls._close(fd);
 	else {
@@ -107,7 +149,7 @@ int close(int fd)
 
 err:
 	pthread_mutex_unlock(&mutex);
-	shutdown();
+	norsim_shutdown();
 	return (-1);
 }
 
@@ -121,7 +163,7 @@ ssize_t pread(int fd, void *buf, size_t count, off_t offset)
 	unsigned long index_in;
 
 	report();
-	initialize(E_SYSCALL_PREAD);
+	initialize_syscall(E_SYSCALL_PREAD);
 	if (fd != cache_file_fd)
 		ret = real_syscalls._pread(fd, buf, count, offset);
 	else {
@@ -175,7 +217,7 @@ ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset)
 	unsigned long index_in;
 
 	report();
-	initialize(E_SYSCALL_PWRITE);
+	initialize_syscall(E_SYSCALL_PWRITE);
 	if (fd != cache_file_fd)
 		ret = real_syscalls._pwrite(fd, buf, count, offset);
 	else {
@@ -224,7 +266,7 @@ ssize_t read(int fd, void *buf, size_t count)
 {
 	// TODO: simplified version
 	report();
-	initialize(E_SYSCALL_READ);
+	initialize_syscall(E_SYSCALL_READ);
 	return (real_syscalls._read(fd, buf, count));
 }
 
@@ -233,7 +275,7 @@ ssize_t write(int fd, const void *buf, size_t count)
 {
 	// TODO: simplified version
 	report();
-	initialize(E_SYSCALL_WRITE);
+	initialize_syscall(E_SYSCALL_WRITE);
 	return (real_syscalls._write(fd, buf, count));
 }
 
@@ -245,7 +287,7 @@ int ioctl(int fd, unsigned long request, ...)
 	va_list args;
 
 	report();
-	initialize(E_SYSCALL_IOCTL);
+	initialize_syscall(E_SYSCALL_IOCTL);
 	va_start(args, request);
 	if (fd != cache_file_fd)
 		ret = real_syscalls._ioctl(fd, request, args);

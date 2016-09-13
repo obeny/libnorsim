@@ -2,12 +2,16 @@ VERSION=1.0
 
 CC ?= gcc
 
-LIB_OBJS := libnorsim.o libnorsim_syscalls.o
+LIB_OBJS := libnorsim.o libnorsim_syscalls.o libnorsim_helpers.o
 PRG_OBJS := main.o
 
 CFLAGS := -pipe -std=c11 -D_GNU_SOURCE=1 -fstack-protector-all
 CFLAGS_LIB := -fPIC
-CFLAGS_WRN := -Wall -Wextra -Wwrite-strings -Wbad-function-cast -Wshadow -Wpointer-arith -Wmissing-declarations -Wundef -Wunreachable-code -Wuninitialized -Wmissing-noreturn -Wmissing-braces -Winit-self -Wcast-align -Wnested-externs -Winline -Wredundant-decls -Wparentheses -Wno-unused-result -Wno-missing-declarations
+CFLAGS_WRN := -Wall -Wextra
+CFLAGS_WRN += -Wnonnull -Winit-self -Wignored-qualifiers -Wunused -Wundef -Wshadow -Wpointer-arith
+CFLAGS_WRN += -Wbad-function-cast -Wcast-align -Wwrite-strings -Wlogical-not-parentheses -Waggregate-return
+CFLAGS_WRN += -Wmissing-declarations -Wmissing-noreturn -Wnested-externs -Winline -Wredundant-decls
+CFLAGS_WRN += -Wno-unused-result -Wno-missing-declarations
 #-Wcast-qual
 CFLAGS_DBG := -ggdb -O0
 CFLAGS_REL := -g0 -O3
