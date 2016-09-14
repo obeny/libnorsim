@@ -283,8 +283,11 @@ ssize_t write(int fd, const void *buf, size_t count)
 int ioctl(int fd, unsigned long request, ...)
 {
 	int ret = -1;
-	unsigned index;
+	int rnd;
+	unsigned long index;
 	va_list args;
+	mtd_info_t *mi;
+	erase_info_t *ei;
 
 	report();
 	initialize_syscall(E_SYSCALL_IOCTL);
@@ -295,44 +298,62 @@ int ioctl(int fd, unsigned long request, ...)
 		switch (request) {
 			case MEMGETINFO:
 				ret = 0;
-				mtd_info_t *mi = va_arg(args, mtd_info_t*);
+				mi = va_arg(args, mtd_info_t*);
 				memcpy(mi, &mtd_info, sizeof(mtd_info));
 				PDBG("got MEMGETINFO request\n");
 				break;
 			case MEMUNLOCK:
-			case MEMERASE:
-				if (MEMUNLOCK == request)
-					PDBG("got MEMUNLOCK request\n");
-				else if (MEMERASE == request)
-					PDBG("got MEMERASE request\n");
-
-				erase_info_t *ei = va_arg(args, erase_info_t*);
+				ret = 0;				
+				PDBG("got MEMUNLOCK request\n");
+				ei = va_arg(args, erase_info_t*);
 				if ((0 != (ei->start % erase_size) || 0 != (ei->length % erase_size))) {
-					ret = -1;
 					PINF("erase_info_t invalid, start=0x%04lx, length=0x%04lx\n", (unsigned long)ei->start, (unsigned long)ei->length);
+					ret = -1;
+					break;
 				}
-				else {
-					index = get_page_by_offset(ei->start);
-					if (MEMERASE == request) {
-						pthread_mutex_lock(&mutex);
-						if (page_info[index].unlocked) {
-							real_syscalls._pwrite(cache_file_fd, erase_buffer, ei->length, ei->start);
-							page_info[index].erases++;
-						}
-						else {
-							PINF("page %d locked, refusing erase\n", index);
-							ret = -1;
-							break;
-						}
-						page_info[index].unlocked = 0;
+				index = get_page_by_offset(ei->start);
+				pthread_mutex_lock(&mutex);
+				page_info[index].unlocked = 1;
+				pthread_mutex_unlock(&mutex);
+				ret = 0;
+				break;
+			case MEMERASE:
+				PDBG("got MEMERASE request\n");
+				ei = va_arg(args, erase_info_t*);
+				if ((0 != (ei->start % erase_size) || 0 != (ei->length % erase_size))) {
+					PINF("erase_info_t invalid, start=0x%04lx, length=0x%04lx\n", (unsigned long)ei->start, (unsigned long)ei->length);
+					ret = -1;
+					break;
+				}
+				index = get_page_by_offset(ei->start);
+				pthread_mutex_lock(&mutex);
+				if (page_info[index].unlocked) {
+					if (page_info[index].current_cycles < page_info[index].cycles) {
+						page_info[index].current_cycles++;
 						pthread_mutex_unlock(&mutex);
-					} else if (MEMUNLOCK == request) {
-						pthread_mutex_lock(&mutex);
-						page_info[index].unlocked = 1;
-						pthread_mutex_unlock(&mutex);
+						ret = real_syscalls._pwrite(cache_file_fd, erase_buffer, ei->length, ei->start);
+						break;
 					}
-					ret = 0;
+					page_info[index].erases++;
+					if (E_BEH_EIO == beh_weak) {
+						PDBG("EIO at page: %lu\n", index);
+						ret = -1;
+					} else {
+						rnd = rand() % ei->length;
+						PDBG("RND at page: %lu[%d] = 0x%02X\n", index, rnd, (~rnd) & 0xFF);
+						((char*)erase_buffer)[rnd] = ~rnd;
+						ret = real_syscalls._pwrite(cache_file_fd, erase_buffer, ei->length, ei->start);
+						((char*)erase_buffer)[rnd] = 0xFF;
+					}
+					page_info[index].unlocked = 0;
+					pthread_mutex_unlock(&mutex);
+				} else {
+					PINF("page %ld locked, refusing erase\n", index);
+					ret = -1;
+					break;
 				}
+				ret = 0;
+				break;
 			default:
 				break;
 		}
