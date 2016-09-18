@@ -1,6 +1,6 @@
 // TODO:
-// cleanup init
-// improve exit
+// c++ port
+// net-socket comm
 // implement read, write (any others?)
 // real failures (masks)
 // refactoring

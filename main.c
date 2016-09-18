@@ -7,6 +7,7 @@
 
 int main(void)
 {
+	puts("running main");
 	char buf[512*1024];
 	int fd = open("/tmp/nor", O_RDWR);
 	int read_bytes;
