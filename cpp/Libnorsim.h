@@ -19,6 +19,8 @@
 
 #include <memory>
 
+#include <mtd/mtd-user.h>
+
 #include "SyscallsCache.h"
 
 typedef enum
@@ -72,8 +74,11 @@ private:
 	bool initPages();
 	void initWeakPages();
 	void initGravePages();
+	void initMtdInfo();
 
-	void parsePageType(char* env, const char* const env_name, const char* const name,
+	void printUsage();
+
+	int parsePageType(char* env, const char* const env_name, const char* const name,
 		e_beh_t* const beh, const e_page_type_t type);
 	int parsePageEnv(const char * const str, e_page_type_t type);
 
@@ -87,6 +92,11 @@ private:
 	unsigned m_pages;
 	unsigned long m_size;
 	unsigned long m_eraseSize;
+
+	int m_weakPages;
+	int m_gravePages;
+
+	mtd_info_t m_mtdInfo;
 
 	e_beh_t beh_weak;
 	e_beh_t beh_grave;

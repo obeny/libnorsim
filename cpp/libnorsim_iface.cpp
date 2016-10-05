@@ -1,8 +1,13 @@
 #include <cstdio>
 
+#include <signal.h>
+
 #include "Libnorsim.h"
 
 extern "C" {
+
+int report_requested = 0;
+
 int open(const char *path, int oflag, ...)
 {
 	Libnorsim &instance = Libnorsim::getInstance();
@@ -57,6 +62,12 @@ int ioctl(int fd, unsigned long request, ...)
 	
 	puts("ioctl");
 	return 0;
+}
+
+void sig_handler_USR1(int signum)
+{
+	if (SIGUSR1 == signum)
+		report_requested = 1;
 }
 
 } // extern "C"

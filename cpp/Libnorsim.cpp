@@ -1,11 +1,17 @@
 #include <cstdio>
 #include <cstring>
 
+#include <signal.h>
 #include <unistd.h>
 #include <sys/stat.h>
 
+#include <mtd/mtd-user.h>
+
 #include "Libnorsim.h"
 #include "LogFormatterLibnorsim.h"
+
+extern "C" void sig_handler_USR1(int signum);
+extern "C" int report_requested;
 
 __attribute__((constructor)) void libnorsim_constructor()
 {
@@ -24,19 +30,33 @@ Libnorsim::Libnorsim()
 	: m_initialized(false) {
 	initLogger();
 	if (!initSyscallsCache())
-		return;
+		goto err;
 	if (!initCacheFile())
-		return;
+		goto err;
 	if (!initSizes())
-		return;
+		goto err;
 	if (!initPages())
-		return;
+		goto err;
 
 	initWeakPages();
 	initGravePages();
 
+	if ((!m_weakPages) && (!m_gravePages))
+		m_logger->log(Loglevel::WARNING, "No failures defined, faults won't be forwarded to user program");
+
+	m_logger->log(Loglevel::ALWAYS, "SUMMARY:");
+	// report_pages(0);s
+
+	initMtdInfo();
+	report_requested = 0;
+	signal(SIGUSR1, sig_handler_USR1);
+
 	m_logger->log(Loglevel::DEBUG, "Libnorsim init OK");
 	m_initialized = true;
+	return;
+err:
+	printUsage();
+	m_logger->log(Loglevel::DEBUG, "Libnorsim init FAILED!");
 }
 
 Libnorsim::~Libnorsim() {
@@ -153,7 +173,7 @@ void Libnorsim::initWeakPages() {
 		return;
 	}
 
-	parsePageType(env_weak_pages, ENV_WEAK_PAGES, "weak", &beh_weak, E_PAGE_WEAK);
+	m_weakPages = parsePageType(env_weak_pages, ENV_WEAK_PAGES, "weak", &beh_weak, E_PAGE_WEAK);
 }
 
 void Libnorsim::initGravePages() {
@@ -163,32 +183,70 @@ void Libnorsim::initGravePages() {
 		return;
 	}
 
-	parsePageType(env_grave_pages, ENV_GRAVE_PAGES, "grave", &beh_grave, E_PAGE_GRAVE);
+	m_gravePages = parsePageType(env_grave_pages, ENV_GRAVE_PAGES, "grave", &beh_grave, E_PAGE_GRAVE);
 }
 
-void Libnorsim::parsePageType(char* env, const char* const env_name, const char* const name,
+void Libnorsim::initMtdInfo() {
+	memset(&m_mtdInfo, 0x00, sizeof(mtd_info_t));
+	m_mtdInfo.type = MTD_NORFLASH;
+	m_mtdInfo.flags = MTD_CAP_NORFLASH;
+	m_mtdInfo.size = m_size;
+	m_mtdInfo.erasesize = m_eraseSize;
+	m_mtdInfo.writesize = 1;
+	m_mtdInfo.oobsize = 0;
+}
+
+void Libnorsim::printUsage() {
+	printf("\nversion: %s\n", VERSION);
+	puts("usage: ");
+	puts("following environment variables can be defined to set library behavior:");
+	puts("\t" ENV_LOGLEVEL    ":\t0 - SILENCE, 1 - ERRORS, 2 - INFO, 3 - DEBUG");
+	puts("\t" ENV_LOG         ":\tstdio - log to console, <filepath> - log to file");
+	puts("\t" ENV_CACHE_FILE  ":\tpath to file which will be used as storage");
+	puts("\t" ENV_SIZE        ":\tsize of flash device (decimal number in kBytes)");
+	puts("\t" ENV_ERASE_SIZE  ":\tsize of erase page (decimal number in kBytes");
+	puts("\t" ENV_WEAK_PAGES  ":\tpages marked as weak (see format description)");
+	puts("\t" ENV_GRAVE_PAGES ":\tpages marked as grave (see format description)");
+	puts("");
+	puts("format used by weak and grave pages:");
+	puts("\t(([rnd|eio])? <page_number>,<cycles>;)+");
+	puts("example:");
+	puts("\teio 1,3;1024,10; - page 1 and 1024 will be marked weak with 3 and 10 cycles accordingly and operations will result in \"eio\" error");
+	puts("");
+	puts("failure types:");
+	puts("\teio:   page operation return -1");
+	puts("\trnd:   read/write will return/store randomized data");
+	puts("");
+	puts("failure types:");
+	puts("\tweak:  page will start failing during write operations after given amount of cycles");
+	puts("\tgrave: page will start failing during read operations after given amount of cycles");
+}
+
+
+int Libnorsim::parsePageType(char* env, const char* const env_name, const char* const name,
 		e_beh_t* const beh, const e_page_type_t type) {
 	int res = 0;
 
-	if (!env) {
-		if (0 == strncmp(env, PARSE_BEH_EIO, PARSE_BEH_LEN)) {
-			*beh = E_BEH_EIO;
-			m_logger->log(Loglevel::INFO, "Set %s behavior: %d", name, PARSE_BEH_EIO);
-			env = strchr(env, PARSE_PREFIX_DELIM) + 1;
-		}
-		else if (0 == strncmp(env, PARSE_BEH_RND, PARSE_BEH_LEN)) {
-			*beh = E_BEH_RND;
-			m_logger->log(Loglevel::INFO, "Set %s behavior: %d", name, PARSE_BEH_RND);
-			env = strchr(env, PARSE_PREFIX_DELIM) + 1;
-		} else {
-			*beh = E_BEH_EIO;
-			m_logger->log(Loglevel::INFO, "No %s pages behavior defined, assuming \"eioa\"", name);
-		}
-		if ((res = parsePageEnv(env, type)) < 0)
-			m_logger->log(Loglevel::INFO, "Couldn't parse %s", env);
+	if (0 == strncmp(env, PARSE_BEH_EIO, PARSE_BEH_LEN)) {
+		*beh = E_BEH_EIO;
+		m_logger->log(Loglevel::INFO, "Set \"%s pages\" behavior: %s", false, name, PARSE_BEH_EIO);
+		env = strchr(env, PARSE_PREFIX_DELIM) + 1;
 	}
-	m_logger->log(Loglevel::INFO, "Set %s pages: %d", name, res);
-	return;
+	else if (0 == strncmp(env, PARSE_BEH_RND, PARSE_BEH_LEN)) {
+		*beh = E_BEH_RND;
+		m_logger->log(Loglevel::INFO, "Set \"%s pages\" behavior: %s", false, name, PARSE_BEH_RND);
+		env = strchr(env, PARSE_PREFIX_DELIM) + 1;
+	} else {
+		*beh = E_BEH_EIO;
+		m_logger->log(Loglevel::INFO, "No \"%s pages\" behavior defined, assuming \"eioa\"", false, name);
+	}
+
+	if ((res = parsePageEnv(env, type)) < 0) {
+		m_logger->log(Loglevel::INFO, "Couldn't parse: \"%s\"", false, env);
+		return (res);
+	}
+	m_logger->log(Loglevel::INFO, "Set \"%s pages\": %d", false, name, res);
+	return (res);
 }
 int Libnorsim::parsePageEnv(const char * const str, e_page_type_t type) {
 	const char *cur_node = str;
@@ -202,18 +260,23 @@ int Libnorsim::parsePageEnv(const char * const str, e_page_type_t type) {
 	if (0 == str[0])
 		return (0);
 
+	char type_sign = (type == E_PAGE_WEAK)?('W'):('G');
 	do {
-		end_node = strchr(cur_node, PARSE_NODE_DELIM);
+		end_node = (char*)(strchr(cur_node, PARSE_NODE_DELIM));
 		if (NULL == end_node) break;
-		end_prop = strchr(cur_node, PARSE_PROP_DELIM);
+		end_prop = (char*)strchr(cur_node, PARSE_PROP_DELIM);
 		if (NULL == end_prop) break;
 
 		page = strtoul(cur_node, &end_prop, 10);
 		cur_prop = ++end_prop;
 		cycles = strtoul(cur_prop, NULL, 10);
-		m_logger->log(Loglevel::DEBUG, "page=%lu\tcycles=%u%s", page, cycles);
+		m_logger->log(Loglevel::DEBUG, "\t(%c)\tpage=%lu\tcycles=%u", false,
+			type_sign, page, cycles
+		);
 		if (page > m_pages) {
-			m_logger->log(Loglevel::ERROR, "trying to set non existing page (page=%lu > pages=%lu)", page, m_pages);
+			m_logger->log(Loglevel::ERROR, "\t(%c)\ttrying to set non existing page (page=%lu > pages=%lu)", false,
+				type_sign, page, m_pages
+			);
 			return -1;
 		}
 		m_pageInfo.get()[page].type = type;
@@ -227,3 +290,47 @@ int Libnorsim::parsePageEnv(const char * const str, e_page_type_t type) {
 
 	return (count);
 }
+
+#if 0
+static void report_pages(int detailed)
+{
+	pthread_mutex_lock(&mutex);
+	for (unsigned i = 0; i < pages; ++i) {
+		switch (page_info[i].type) {
+			case E_PAGE_NORMAL:
+				if (detailed && (page_info[i].reads || page_info[i].writes || page_info[i].erases)) {
+					PALL(0, "Page %5u: N(reads=%lu, writes=%lu, erases=%lu)\n",
+						i,
+						page_info[i].reads,
+						page_info[i].writes,
+						page_info[i].erases
+					);
+				}
+				break;
+			case E_PAGE_WEAK:
+				PALL(0, "Page %5u: W(cycles=%u, remaining=%u, reads=%lu, writes=%lu, erases=%lu)\n",
+					i,
+					page_info[i].cycles,
+					page_info[i].cycles - page_info[i].current_cycles,
+					page_info[i].reads,
+					page_info[i].writes,
+					page_info[i].erases
+				);
+				break;
+			case E_PAGE_GRAVE:
+				PALL(0, "Page %5u: G(cycles=%u, remaining=%u, reads=%lu, writes=%lu, erases=%lu)\n",
+					i,
+					page_info[i].cycles,
+					page_info[i].cycles - page_info[i].current_cycles,
+					page_info[i].reads,
+					page_info[i].writes,
+					page_info[i].erases
+				);
+				break;
+			default:
+				break;
+		}
+	}
+	pthread_mutex_unlock(&mutex);
+}
+#endif
