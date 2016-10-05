@@ -17,7 +17,13 @@
 #define PARSE_PROP_DELIM   ','
 #define PARSE_PREFIX_DELIM ' '
 
+#define SIGNAL_REPORT_SHORT 1
+#define SIGNAL_REPORT_DETAILED 2
+
+#define STATS_FILL(t,a,op) t.a##_##op = get_##a(t.a##_##op,m_pageInfo.get()[i].op)
+
 #include <memory>
+#include <mutex>
 
 #include <mtd/mtd-user.h>
 
@@ -47,6 +53,16 @@ typedef struct
 	unsigned unlocked;
 } st_page_t;
 
+typedef struct
+{
+	unsigned long min_reads;
+	unsigned long max_reads;
+	unsigned long min_writes;
+	unsigned long max_writes;
+	unsigned long min_erases;
+	unsigned long max_erases;
+} st_page_stats_t;
+
 class Logger;
 class LogFormatter;
 
@@ -58,8 +74,12 @@ public:
 		return instance;
 	}
 
-	SyscallsCache & getSyscallsCache();
-	Logger& getLogger() { return *(m_logger.get()); }
+	SyscallsCache & getSyscallsCache() { return (*m_syscallsCache.get()); }
+	Logger& getLogger() { return (*m_logger.get()); }
+
+	std::mutex & getGlobalMutex() { return (m_mutex); }
+
+	void handleReportRequest();
 
 private:
 	Libnorsim();
@@ -78,6 +98,9 @@ private:
 
 	void printUsage();
 
+	void printPageReport(bool detailed = false);
+	void printPageStatistics();
+
 	int parsePageType(char* env, const char* const env_name, const char* const name,
 		e_beh_t* const beh, const e_page_type_t type);
 	int parsePageEnv(const char * const str, e_page_type_t type);
@@ -85,7 +108,8 @@ private:
 	bool m_initialized;
 	std::unique_ptr<LogFormatter> m_logFormatter;
 	std::unique_ptr<Logger> m_logger;
-	SyscallsCache *m_syscallsCache;
+	std::unique_ptr<SyscallsCache> m_syscallsCache;
+	std::mutex m_mutex;
 
 	std::unique_ptr<char> m_cacheFile;
 	std::unique_ptr<st_page_t> m_pageInfo;

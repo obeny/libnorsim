@@ -19,6 +19,7 @@ enum class Loglevel {
 	ERROR,
 	WARNING,
 	INFO,
+	NOTE,
 	DEBUG
 };
 
@@ -64,7 +65,6 @@ protected:
 	LogFormatter* m_logFormatter;
 
 private:
-
 	Loglevel m_verbosity = Loglevel::DEBUG;
 	std::mutex m_mutex;
 };

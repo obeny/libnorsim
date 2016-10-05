@@ -5,8 +5,10 @@
 #include <sys/ioctl.h>
 #include <mtd/mtd-user.h>
 
-int main(void)
+int main(int argc, char* argv[])
 {
+	(void)argv;
+
 	puts("running main");
 	char buf[512*1024];
 	int fd = open("/tmp/nor", O_RDWR);
@@ -77,5 +79,16 @@ int main(void)
 	ret = ioctl(fd, MEMERASE, &ei);
 	printf("ret=%d\n", ret);
 
+	// ret = read(fd, buf, 1);
+	// printf("ret=%d\n", ret);
+
+	// ret = write(fd, buf, 1);
+	// printf("ret=%d\n", ret);
+
+	// hang if needed :)
+	if (argc > 1)
+		while(1) ioctl(fd, MEMUNLOCK, &ei);
+
 	close(fd);
+
 }

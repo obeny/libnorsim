@@ -10,8 +10,11 @@
 #include "Libnorsim.h"
 #include "LogFormatterLibnorsim.h"
 
-extern "C" void sig_handler_USR1(int signum);
-extern "C" int report_requested;
+extern "C" void sig_handler(int signum);
+extern "C" volatile sig_atomic_t report_requested;
+
+unsigned long get_min(unsigned long g, unsigned long p);
+unsigned long get_max(unsigned long g, unsigned long p);
 
 __attribute__((constructor)) void libnorsim_constructor()
 {
@@ -28,6 +31,8 @@ __attribute__((destructor)) void libnorsim_destructor()
 
 Libnorsim::Libnorsim() 
 	: m_initialized(false) {
+	report_requested = 0;
+
 	initLogger();
 	if (!initSyscallsCache())
 		goto err;
@@ -45,21 +50,49 @@ Libnorsim::Libnorsim()
 		m_logger->log(Loglevel::WARNING, "No failures defined, faults won't be forwarded to user program");
 
 	m_logger->log(Loglevel::ALWAYS, "SUMMARY:");
-	// report_pages(0);s
+	printPageReport();
 
 	initMtdInfo();
-	report_requested = 0;
-	signal(SIGUSR1, sig_handler_USR1);
+	signal(SIGUSR1, sig_handler);
+	signal(SIGUSR2, sig_handler);
 
 	m_logger->log(Loglevel::DEBUG, "Libnorsim init OK");
 	m_initialized = true;
 	return;
+
 err:
 	printUsage();
 	m_logger->log(Loglevel::DEBUG, "Libnorsim init FAILED!");
 }
 
 Libnorsim::~Libnorsim() {
+	m_logger->log(Loglevel::ALWAYS, "Page report:");
+	printPageReport(true);
+	m_logger->log(Loglevel::ALWAYS, "Statistics:");
+	printPageStatistics();
+}
+
+void Libnorsim::handleReportRequest() {
+	if (report_requested) {
+		if (!m_initialized) {
+			m_logger->log(Loglevel::WARNING, "Not initialized, no report available");
+		} else {
+			time_t cur_time = time(NULL);
+			struct tm *date_info = localtime(&cur_time);
+
+			m_logger->log(Loglevel::ALWAYS, asctime(date_info), true);
+			m_logger->log(Loglevel::ALWAYS, "Page report:");
+			switch (report_requested) {
+				case SIGNAL_REPORT_SHORT: printPageReport(false); break;
+				case SIGNAL_REPORT_DETAILED: printPageReport(true); break;
+				default: break;
+			}
+
+			m_logger->log(Loglevel::ALWAYS, "Statistics:");
+			printPageStatistics();
+		}
+	}
+	report_requested = 0;
 }
 
 void Libnorsim::initLogger() {
@@ -101,7 +134,7 @@ void Libnorsim::initLogger() {
 }
 
 bool Libnorsim::initSyscallsCache() {
-	m_syscallsCache = new SyscallsCache(this);
+	m_syscallsCache.reset(new SyscallsCache(this));
 	return (m_syscallsCache->isOk()); 
 }
 
@@ -222,6 +255,120 @@ void Libnorsim::printUsage() {
 	puts("\tgrave: page will start failing during read operations after given amount of cycles");
 }
 
+void Libnorsim::printPageReport(bool detailed)
+{
+	std::lock_guard<std::mutex> lg(m_mutex);
+
+	for (unsigned i = 0; i < m_pages; ++i) {
+		switch (m_pageInfo.get()[i].type) {
+			case E_PAGE_NORMAL:
+				if (detailed && (m_pageInfo.get()[i].reads || m_pageInfo.get()[i].writes || m_pageInfo.get()[i].erases)) {
+					m_logger->log(Loglevel::ALWAYS, "\tPage %5u: N(reads=%lu, writes=%lu, erases=%lu)\n", true,
+						i,
+						m_pageInfo.get()[i].reads,
+						m_pageInfo.get()[i].writes,
+						m_pageInfo.get()[i].erases
+					);
+				}
+				break;
+			case E_PAGE_WEAK:
+				m_logger->log(Loglevel::ALWAYS, "\tPage %5u: W(cycles=%u, remaining=%u, reads=%lu, writes=%lu, erases=%lu)\n", true,
+					i,
+					m_pageInfo.get()[i].cycles,
+					m_pageInfo.get()[i].cycles - m_pageInfo.get()[i].current_cycles,
+					m_pageInfo.get()[i].reads,
+					m_pageInfo.get()[i].writes,
+					m_pageInfo.get()[i].erases
+				);
+				break;
+			case E_PAGE_GRAVE:
+				m_logger->log(Loglevel::ALWAYS, "\tPage %5u: G(cycles=%u, remaining=%u, reads=%lu, writes=%lu, erases=%lu)\n", true,
+					i,
+					m_pageInfo.get()[i].cycles,
+					m_pageInfo.get()[i].cycles - m_pageInfo.get()[i].current_cycles,
+					m_pageInfo.get()[i].reads,
+					m_pageInfo.get()[i].writes,
+					m_pageInfo.get()[i].erases
+				);
+				break;
+			default:
+				break;
+		}
+	}
+}
+
+void Libnorsim::printPageStatistics() {
+	st_page_stats_t normal, weak, grave;
+	memset (&normal, 0x00, sizeof(normal));
+	memset (&weak, 0x00, sizeof(weak));
+	memset (&grave, 0x00, sizeof(grave));
+
+	m_mutex.lock();
+	for (unsigned i = 0; i < m_pages; ++i) {
+		switch (m_pageInfo.get()[i].type) {
+			case E_PAGE_NORMAL:
+				STATS_FILL(normal,max,reads); STATS_FILL(normal,max,writes); STATS_FILL(normal,max,erases);
+				break;
+			case E_PAGE_WEAK:
+				STATS_FILL(weak,max,reads); STATS_FILL(weak,max,writes); STATS_FILL(weak,max,erases);
+				break;
+			case E_PAGE_GRAVE:
+				STATS_FILL(grave,max,reads); STATS_FILL(grave,max,writes); STATS_FILL(grave,max,erases);
+				break;
+			default:
+				break;
+		}
+	}
+	normal.min_reads = normal.max_reads; normal.min_writes = normal.max_writes; normal.min_erases = normal.max_erases;
+	weak.min_reads = weak.max_reads; weak.min_writes = weak.max_writes; weak.min_erases = weak.max_erases;
+	grave.min_reads = grave.max_reads; grave.min_writes = grave.max_writes; grave.min_erases = grave.max_erases;
+	for (unsigned i = 0; i < m_pages; ++i) {
+		switch (m_pageInfo.get()[i].type) {
+			case E_PAGE_NORMAL:
+				STATS_FILL(normal,min,reads); STATS_FILL(normal,min,writes); STATS_FILL(normal,min,erases);
+				break;
+			case E_PAGE_WEAK:
+				STATS_FILL(weak,min,reads); STATS_FILL(weak,min,writes); STATS_FILL(weak,min,erases);
+				break;
+			case E_PAGE_GRAVE:
+				STATS_FILL(grave,min,reads); STATS_FILL(grave,min,writes); STATS_FILL(grave,min,erases);
+				break;
+			default:
+				break;
+		}
+	}
+	m_mutex.unlock();
+
+	m_logger->log(Loglevel::ALWAYS, "\tNORMAL pages:\n"
+		"\t\tmin reads:  %lu\n\t\tmax reads:  %lu\n"
+		"\t\tmin writes: %lu\n\t\tmax writes: %lu\n"
+		"\t\tmin erases: %lu\n\t\tmax erases: %lu\n",
+		true,
+		normal.min_reads, normal.max_reads,
+		normal.min_writes, normal.max_writes,
+		normal.min_erases, normal.max_erases
+	);
+
+	m_logger->log(Loglevel::ALWAYS, "\tWEAK pages:\n"
+		"\t\tmin reads:  %lu\n\t\tmax reads:  %lu\n"
+		"\t\tmin writes: %lu\n\t\tmax writes: %lu\n"
+		"\t\tmin erases: %lu\n\t\tmax erases: %lu\n",
+		true,
+		weak.min_reads,	weak.max_reads,
+		weak.min_writes, weak.max_writes,
+		weak.min_erases, weak.max_erases
+	);
+
+	m_logger->log(Loglevel::ALWAYS, "\tGRAVE pages:\n"
+		"\t\tmin reads:  %lu\n\t\tmax reads:  %lu\n"
+		"\t\tmin writes: %lu\n\t\tmax writes: %lu\n"
+		"\t\tmin erases: %lu\n\t\tmax erases: %lu\n",
+		true,
+		grave.min_reads, grave.max_reads,
+		grave.min_writes, grave.max_writes,
+		grave.min_erases, grave.max_erases
+	);
+}
 
 int Libnorsim::parsePageType(char* env, const char* const env_name, const char* const name,
 		e_beh_t* const beh, const e_page_type_t type) {
@@ -238,7 +385,7 @@ int Libnorsim::parsePageType(char* env, const char* const env_name, const char* 
 		env = strchr(env, PARSE_PREFIX_DELIM) + 1;
 	} else {
 		*beh = E_BEH_EIO;
-		m_logger->log(Loglevel::INFO, "No \"%s pages\" behavior defined, assuming \"eioa\"", false, name);
+		m_logger->log(Loglevel::INFO, "No \"%s pages\" behavior defined, assuming \"eio\"", false, name);
 	}
 
 	if ((res = parsePageEnv(env, type)) < 0) {
@@ -248,6 +395,7 @@ int Libnorsim::parsePageType(char* env, const char* const env_name, const char* 
 	m_logger->log(Loglevel::INFO, "Set \"%s pages\": %d", false, name, res);
 	return (res);
 }
+
 int Libnorsim::parsePageEnv(const char * const str, e_page_type_t type) {
 	const char *cur_node = str;
 	char *cur_prop;
@@ -290,47 +438,3 @@ int Libnorsim::parsePageEnv(const char * const str, e_page_type_t type) {
 
 	return (count);
 }
-
-#if 0
-static void report_pages(int detailed)
-{
-	pthread_mutex_lock(&mutex);
-	for (unsigned i = 0; i < pages; ++i) {
-		switch (page_info[i].type) {
-			case E_PAGE_NORMAL:
-				if (detailed && (page_info[i].reads || page_info[i].writes || page_info[i].erases)) {
-					PALL(0, "Page %5u: N(reads=%lu, writes=%lu, erases=%lu)\n",
-						i,
-						page_info[i].reads,
-						page_info[i].writes,
-						page_info[i].erases
-					);
-				}
-				break;
-			case E_PAGE_WEAK:
-				PALL(0, "Page %5u: W(cycles=%u, remaining=%u, reads=%lu, writes=%lu, erases=%lu)\n",
-					i,
-					page_info[i].cycles,
-					page_info[i].cycles - page_info[i].current_cycles,
-					page_info[i].reads,
-					page_info[i].writes,
-					page_info[i].erases
-				);
-				break;
-			case E_PAGE_GRAVE:
-				PALL(0, "Page %5u: G(cycles=%u, remaining=%u, reads=%lu, writes=%lu, erases=%lu)\n",
-					i,
-					page_info[i].cycles,
-					page_info[i].cycles - page_info[i].current_cycles,
-					page_info[i].reads,
-					page_info[i].writes,
-					page_info[i].erases
-				);
-				break;
-			default:
-				break;
-		}
-	}
-	pthread_mutex_unlock(&mutex);
-}
-#endif

@@ -13,6 +13,7 @@ public:
 		YELLOW,
 		BROWN,
 		LIGHT_GREEN,
+		BLUE,
 		LIGHT_TEAL,
 		WHITE
 	};
@@ -49,6 +50,8 @@ private:
 				return "WARNING: ";
 			case Loglevel::INFO:
 				return "INFO:    ";
+			case Loglevel::NOTE:
+				return "NOTE:    ";
 			case Loglevel::DEBUG:
 				return "DEBUG:   ";
 			default:
@@ -65,6 +68,8 @@ private:
 				return Color::BROWN;
 			case Loglevel::INFO:
 				return Color::LIGHT_GREEN;
+			case Loglevel::NOTE:
+				return Color::BLUE;
 			case Loglevel::DEBUG:
 				return Color::LIGHT_TEAL;
 			default:
@@ -83,6 +88,8 @@ private:
 				return "\e[1;32m";
 			case LIGHT_TEAL:
 				return "\e[1;36m";
+			case BLUE:
+				return "\e[1;34m";
 			case WHITE:
 				return "\e[1;37m";
 			default:

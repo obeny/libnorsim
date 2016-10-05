@@ -46,3 +46,35 @@ SyscallsCache::SyscallsCache(Libnorsim *libnorsim)
 bool SyscallsCache::isOk() {
 	return (m_initialized);
 }
+
+int SyscallsCache::invokeOpen(const char *path, int oflag, ...) {
+	va_list args;
+	va_start(args, oflag);
+	return (m_openSC(path, oflag, args));
+}
+
+int SyscallsCache::invokeClose(int fd) {
+	return (m_closeSC(fd));
+}
+
+size_t SyscallsCache::invokePread(int fd, void *buf, size_t count, off_t offset){
+	return (m_preadSC(fd, buf, count, offset));
+}
+
+size_t SyscallsCache::invokePwrite(int fd, const void *buf, size_t count, off_t offset) {
+	return (m_pwriteSC(fd, buf, count, offset));
+}
+
+size_t SyscallsCache::invokeRead(int fd, void *buf, size_t count) {
+	return (m_readSC(fd, buf, count));
+}
+
+size_t SyscallsCache::invokeWrite(int fd, const void *buf, size_t count) {
+	return (m_writeSC(fd, buf, count));
+}
+
+int SyscallsCache::invokeIoctl(int fd, unsigned long request, ...) {
+	va_list args;
+	va_start(args, request);
+	return (m_ioctlSC(fd, request, args));
+}
