@@ -255,14 +255,14 @@ static int internal_pwrite(Libnorsim &libnorsim, int fd, const void *buf, size_t
 	return (ret);
 }
 
-static int internal_ioctl_memgetinfo(Libnorsim &libnorsim, int fd, unsigned long request, va_list args) {
+static int internal_ioctl_memgetinfo(Libnorsim &libnorsim, va_list args) {
 	mtd_info_t *mi = va_arg(args, mtd_info_t*);
 	libnorsim.getLogger().log(Loglevel::DEBUG, "Got MEMGETINFO request");
 	memcpy(mi, libnorsim.getMtdInfo(), sizeof(mtd_info_t));
 	return (0);
 }
 
-static int internal_ioctl_memunlock(Libnorsim &libnorsim, int fd, unsigned long request, va_list args) {
+static int internal_ioctl_memunlock(Libnorsim &libnorsim, va_list args) {
 	erase_info_t *ei = va_arg(args, erase_info_t*);
 	unsigned index = (ei->start) / libnorsim.getEraseSize();
 	libnorsim.getLogger().log(Loglevel::DEBUG, "Got MEMUNLOCK request at page: %d", false, index);
@@ -278,7 +278,7 @@ static int internal_ioctl_memunlock(Libnorsim &libnorsim, int fd, unsigned long 
 	return (0);
 }
 
-static int internal_ioctl_memerase(Libnorsim &libnorsim, int fd, unsigned long request, va_list args) {
+static int internal_ioctl_memerase(Libnorsim &libnorsim, int fd, va_list args) {
 	int ret = 0;
 	erase_info_t *ei = va_arg(args, erase_info_t*);
 	unsigned index = (ei->start) / libnorsim.getEraseSize();
@@ -320,9 +320,9 @@ static int internal_ioctl_memerase(Libnorsim &libnorsim, int fd, unsigned long r
 
 static int internal_ioctl(Libnorsim &libnorsim, int fd, unsigned long request, va_list args) {
 	switch (request) {
-		case MEMGETINFO: return (internal_ioctl_memgetinfo(libnorsim, fd, request, args));
-		case MEMUNLOCK: return (internal_ioctl_memunlock(libnorsim, fd, request, args));
-		case MEMERASE: return (internal_ioctl_memerase(libnorsim, fd, request, args));
+		case MEMGETINFO: return (internal_ioctl_memgetinfo(libnorsim, args));
+		case MEMUNLOCK: return (internal_ioctl_memunlock(libnorsim, args));
+		case MEMERASE: return (internal_ioctl_memerase(libnorsim, fd, args));
 	}
 	return (-1);
 }

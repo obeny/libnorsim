@@ -1,1 +1,0 @@
-g++ cpp/*.cpp -std=c++11 -Wall -Wextra -fPIC -shared -Wl,-soname,libnorsim.so -DVERSION="\"1.0\"" -DLOGGER_PRINTBUFFER_SIZE=1024 -Wno-unused-parameter -o libnorsim.so

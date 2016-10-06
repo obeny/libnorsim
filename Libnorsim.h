@@ -119,8 +119,7 @@ private:
 	void printPageReport(bool detailed = false);
 	void printPageStatistics();
 
-	int parsePageType(char* env, const char* const env_name, const char* const name,
-		e_beh_t* const beh, const e_page_type_t type);
+	int parsePageType(char* env, const char* const name, e_beh_t* const beh, const e_page_type_t type);
 	int parsePageEnv(const char * const str, e_page_type_t type);
 
 	bool m_initialized;

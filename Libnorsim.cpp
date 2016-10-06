@@ -222,7 +222,7 @@ void Libnorsim::initWeakPages() {
 		return;
 	}
 
-	m_weakPages = parsePageType(env_weak_pages, ENV_WEAK_PAGES, "weak", &m_behaviorWeak, E_PAGE_WEAK);
+	m_weakPages = parsePageType(env_weak_pages, "weak", &m_behaviorWeak, E_PAGE_WEAK);
 }
 
 void Libnorsim::initGravePages() {
@@ -232,7 +232,7 @@ void Libnorsim::initGravePages() {
 		return;
 	}
 
-	m_gravePages = parsePageType(env_grave_pages, ENV_GRAVE_PAGES, "grave", &m_behaviorGrave, E_PAGE_GRAVE);
+	m_gravePages = parsePageType(env_grave_pages, "grave", &m_behaviorGrave, E_PAGE_GRAVE);
 }
 
 void Libnorsim::initMtdInfo() {
@@ -380,8 +380,7 @@ void Libnorsim::printPageStatistics() {
 	m_logger->log(Loglevel::ALWAYS, "\t\tmax erases: %lu", false, grave.max_erases);
 }
 
-int Libnorsim::parsePageType(char* env, const char* const env_name, const char* const name,
-		e_beh_t* const beh, const e_page_type_t type) {
+int Libnorsim::parsePageType(char* env, const char* const name,	e_beh_t* const beh, const e_page_type_t type) {
 	int res = 0;
 
 	if (0 == strncmp(env, PARSE_BEH_EIO, PARSE_BEH_LEN)) {
