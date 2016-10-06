@@ -279,7 +279,7 @@ void Libnorsim::printPageReport(bool detailed)
 		switch (m_pageInfo.get()[i].type) {
 			case E_PAGE_NORMAL:
 				if (detailed && (m_pageInfo.get()[i].reads || m_pageInfo.get()[i].writes || m_pageInfo.get()[i].erases)) {
-					m_logger->log(Loglevel::ALWAYS, "\tPage %5u: N(reads=%lu, writes=%lu, erases=%lu)\n", true,
+					m_logger->log(Loglevel::ALWAYS, "\tPage %5u: N(reads=%lu, writes=%lu, erases=%lu)", false,
 						i,
 						m_pageInfo.get()[i].reads,
 						m_pageInfo.get()[i].writes,
@@ -288,7 +288,7 @@ void Libnorsim::printPageReport(bool detailed)
 				}
 				break;
 			case E_PAGE_WEAK:
-				m_logger->log(Loglevel::ALWAYS, "\tPage %5u: W(cycles=%u, remaining=%u, reads=%lu, writes=%lu, erases=%lu)\n", true,
+				m_logger->log(Loglevel::ALWAYS, "\tPage %5u: W(cycles=%u, remaining=%u, reads=%lu, writes=%lu, erases=%lu)", false,
 					i,
 					m_pageInfo.get()[i].cycles,
 					m_pageInfo.get()[i].cycles - m_pageInfo.get()[i].current_cycles,
@@ -298,7 +298,7 @@ void Libnorsim::printPageReport(bool detailed)
 				);
 				break;
 			case E_PAGE_GRAVE:
-				m_logger->log(Loglevel::ALWAYS, "\tPage %5u: G(cycles=%u, remaining=%u, reads=%lu, writes=%lu, erases=%lu)\n", true,
+				m_logger->log(Loglevel::ALWAYS, "\tPage %5u: G(cycles=%u, remaining=%u, reads=%lu, writes=%lu, erases=%lu)", false,
 					i,
 					m_pageInfo.get()[i].cycles,
 					m_pageInfo.get()[i].cycles - m_pageInfo.get()[i].current_cycles,
@@ -355,35 +355,29 @@ void Libnorsim::printPageStatistics() {
 	}
 	m_mutex.unlock();
 
-	m_logger->log(Loglevel::ALWAYS, "\tNORMAL pages:\n"
-		"\t\tmin reads:  %lu\n\t\tmax reads:  %lu\n"
-		"\t\tmin writes: %lu\n\t\tmax writes: %lu\n"
-		"\t\tmin erases: %lu\n\t\tmax erases: %lu\n",
-		true,
-		normal.min_reads, normal.max_reads,
-		normal.min_writes, normal.max_writes,
-		normal.min_erases, normal.max_erases
-	);
+	m_logger->log(Loglevel::ALWAYS, "\tNORMAL pages:");
+	m_logger->log(Loglevel::ALWAYS, "\t\tmin reads:  %lu", false, normal.min_reads);
+	m_logger->log(Loglevel::ALWAYS, "\t\tmax reads:  %lu", false, normal.max_reads);
+	m_logger->log(Loglevel::ALWAYS, "\t\tmin writes: %lu", false, normal.min_writes);
+	m_logger->log(Loglevel::ALWAYS, "\t\tmax writes: %lu", false, normal.max_writes);
+	m_logger->log(Loglevel::ALWAYS, "\t\tmin erases: %lu", false, normal.min_erases);
+	m_logger->log(Loglevel::ALWAYS, "\t\tmax erases: %lu", false, normal.max_erases);
 
-	m_logger->log(Loglevel::ALWAYS, "\tWEAK pages:\n"
-		"\t\tmin reads:  %lu\n\t\tmax reads:  %lu\n"
-		"\t\tmin writes: %lu\n\t\tmax writes: %lu\n"
-		"\t\tmin erases: %lu\n\t\tmax erases: %lu\n",
-		true,
-		weak.min_reads,	weak.max_reads,
-		weak.min_writes, weak.max_writes,
-		weak.min_erases, weak.max_erases
-	);
+	m_logger->log(Loglevel::ALWAYS, "\tWEAK pages:");
+	m_logger->log(Loglevel::ALWAYS, "\t\tmin reads:  %lu", false, weak.min_reads);
+	m_logger->log(Loglevel::ALWAYS, "\t\tmax reads:  %lu", false, weak.max_reads);
+	m_logger->log(Loglevel::ALWAYS, "\t\tmin writes: %lu", false, weak.min_writes);
+	m_logger->log(Loglevel::ALWAYS, "\t\tmax writes: %lu", false, weak.max_writes);
+	m_logger->log(Loglevel::ALWAYS, "\t\tmin erases: %lu", false, weak.min_erases);
+	m_logger->log(Loglevel::ALWAYS, "\t\tmax erases: %lu", false, weak.max_erases);
 
-	m_logger->log(Loglevel::ALWAYS, "\tGRAVE pages:\n"
-		"\t\tmin reads:  %lu\n\t\tmax reads:  %lu\n"
-		"\t\tmin writes: %lu\n\t\tmax writes: %lu\n"
-		"\t\tmin erases: %lu\n\t\tmax erases: %lu\n",
-		true,
-		grave.min_reads, grave.max_reads,
-		grave.min_writes, grave.max_writes,
-		grave.min_erases, grave.max_erases
-	);
+	m_logger->log(Loglevel::ALWAYS, "\tGRAVE pages:");
+	m_logger->log(Loglevel::ALWAYS, "\t\tmin reads:  %lu", false, grave.min_reads);
+	m_logger->log(Loglevel::ALWAYS, "\t\tmax reads:  %lu", false, grave.max_reads);
+	m_logger->log(Loglevel::ALWAYS, "\t\tmin writes: %lu", false, grave.min_writes);
+	m_logger->log(Loglevel::ALWAYS, "\t\tmax writes: %lu", false, grave.max_writes);
+	m_logger->log(Loglevel::ALWAYS, "\t\tmin erases: %lu", false, grave.min_erases);
+	m_logger->log(Loglevel::ALWAYS, "\t\tmax erases: %lu", false, grave.max_erases);
 }
 
 int Libnorsim::parsePageType(char* env, const char* const env_name, const char* const name,

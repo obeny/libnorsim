@@ -95,6 +95,7 @@ ssize_t read(int fd, void *buf, size_t count) {
 	Libnorsim &instance = Libnorsim::getInstance();
 	std::lock_guard<std::mutex> lg(instance.getGlobalMutex());
 	SYSCALL_PROLOGUE("read");
+	instance.getLogger().log(Loglevel::NOTE, "TODO: stub bypassing to real read function");
 	return (instance.getSyscallsCache().invokeRead(fd, buf, count));
 }
 
@@ -103,6 +104,7 @@ ssize_t write(int fd, const void *buf, size_t count) {
 	Libnorsim &instance = Libnorsim::getInstance();
 	std::lock_guard<std::mutex> lg(instance.getGlobalMutex());
 	SYSCALL_PROLOGUE("write");
+	instance.getLogger().log(Loglevel::NOTE, "TODO: stub bypassing to real write function");
 	return (instance.getSyscallsCache().invokeWrite(fd, buf, count));
 }
 
@@ -205,7 +207,6 @@ static int internal_pread(Libnorsim &libnorsim, int fd, void *buf, size_t count,
 				unsigned index_in = offset - index * libnorsim.getEraseSize();
 				if ((index_in + count) > libnorsim.getEraseSize()) {
 					libnorsim.getLogger().log(Loglevel::WARNING, "Read block exceeds eraseblock boundary");
-					return (-1);
 				}
 				ret = libnorsim.getSyscallsCache().invokePread(fd, buf, count, offset);
 				unsigned long rnd = rand() % count;
