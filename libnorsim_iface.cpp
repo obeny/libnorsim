@@ -1,4 +1,3 @@
-#include <cstdio>
 #include <cstring>
 
 #include <unistd.h>
@@ -132,7 +131,6 @@ void sig_handler(int signum)
 	switch (signum) {
 		case SIGUSR1: report_requested = SIGNAL_REPORT_SHORT; break;
 		case SIGUSR2: report_requested = SIGNAL_REPORT_DETAILED; break;
-		default: break;
 	}
 }
 
