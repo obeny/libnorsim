@@ -3,10 +3,6 @@
 
 #include <cstdarg>
 #include <cstdio>
-#include <cstring>
-#include <iostream>
-#include <fstream>
-#include <memory>
 #include <mutex>
 
 #ifndef LOGGER_PRINTBUFFER_SIZE
@@ -28,7 +24,7 @@ public:
 	LogFormatter() {}
 	virtual ~LogFormatter() {}
 
-	virtual const char* format(Loglevel loglevel, const char* msg, bool raw) = 0;
+	virtual const char* format(const Loglevel loglevel, const char* msg, const bool raw) = 0;
 };
 
 class Logger {
@@ -37,7 +33,7 @@ public:
 
 	virtual bool isOk() = 0;
 
-	void log(const Loglevel level, const char *format, bool raw = false, ...) {
+	void log(const Loglevel level, const char *format, const bool raw = false, ...) {
 		std::lock_guard<std::mutex> lg(m_mutex);
 		if (!m_logFormatter)
 			return;
@@ -57,7 +53,8 @@ public:
 	}
 
 protected:
-	Logger() {}
+	Logger(LogFormatter *formatter)
+	 : m_logFormatter(formatter) {}
 
 	virtual void write(const char *msg) = 0;
 
@@ -78,13 +75,13 @@ public:
 	bool isOk() { return (true); }
 
 private:
-	LoggerStdio(LogFormatter *formatter) {
-		m_logFormatter = formatter;
-	}
+	LoggerStdio(LogFormatter *formatter)
+	 : Logger(formatter) {}
 
 	void write(const char *msg) { printf("%s", msg); fflush(stdout); }
 };
 
+#ifdef LOGGERFILE_ENABLE
 class LoggerFile : public Logger {
 	friend class LoggerFactory;
 
@@ -96,8 +93,8 @@ public:
 
 	bool isOk() { return (m_ok); }
 private:
-	LoggerFile(LogFormatter *formatter, const char* path) {
-		m_logFormatter = formatter;
+	LoggerFile(LogFormatter *formatter, const char* path)
+	 : Logger(formatter) {
 		m_outFile = fopen(path, "a");
 		if (m_outFile)
 			m_ok = true;
@@ -108,15 +105,18 @@ private:
 	bool m_ok = false;
 	FILE *m_outFile;
 };
+#endif // LOGGERFILE_ENABLE
 
 class LoggerFactory {
 public:
 	static Logger* createLoggerStdio(LogFormatter *formatter) {
 		return (new LoggerStdio(formatter));
 	}
+#ifdef LOGGERFILE_ENABLE
 	static Logger* createLoggerFile(LogFormatter *formatter, const char* file) {
 		return (new LoggerFile(formatter, file));
 	}
+#endif // LOGGERFILE_ENABLE
 };
 
 #endif // __LOGGER_H__
