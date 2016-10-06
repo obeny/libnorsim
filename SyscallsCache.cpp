@@ -1,9 +1,10 @@
-#include "SyscallsCache.h"
-
-#include "Libnorsim.h"
-#include "Logger.h"
+#include <cstdio>
 
 #include <dlfcn.h>
+
+#include "SyscallsCache.h"
+#include "Libnorsim.h"
+#include "Logger.h"
 
 SyscallsCache::SyscallsCache(Libnorsim *libnorsim)
 	: m_initialized(true), m_libnorsim(libnorsim)

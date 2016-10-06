@@ -1,8 +1,6 @@
 #ifndef __SYSCALLSCACHE_H__
 #define __SYSCALLSCACHE_H__
 
-#include <cstdio>
-
 class Libnorsim;
 
 class SyscallsCache {
