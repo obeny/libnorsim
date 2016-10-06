@@ -1,3 +1,9 @@
+// TODO:
+// net-socket comm
+// implement read, write (any others?)
+// real failures (masks)
+// refactoring
+
 #include <cstdio>
 #include <cstring>
 
@@ -9,6 +15,8 @@
 
 #include "Libnorsim.h"
 #include "LogFormatterLibnorsim.h"
+
+#define STATS_FILL(t,a,op) t.a##_##op = get_##a(t.a##_##op,m_pageInfo.get()[i].op)
 
 extern "C" void sig_handler(int signum);
 extern "C" volatile sig_atomic_t report_requested;
@@ -41,6 +49,8 @@ Libnorsim::Libnorsim()
 	if (!initSizes())
 		goto err;
 	if (!initPages())
+		goto err;
+	if (!initEraseBuffer())
 		goto err;
 
 	initWeakPages();
@@ -191,13 +201,18 @@ bool Libnorsim::initSizes() {
 bool Libnorsim::initPages() {
 	m_pages = m_size / m_eraseSize;
 	m_logger->log(Loglevel::INFO, "Set page count: %lu", false, m_pages);
-	m_pageInfo.reset((st_page_t*)malloc(sizeof(st_page_t) * m_pages));
+	m_pageInfo.reset(new st_page_t[m_pages]);
 	if (!m_pageInfo) {
 		m_logger->log(Loglevel::FATAL, "Couldn't allocate memory for page information");
 		return (false);
 	}
 	memset(m_pageInfo.get(), 0x00, sizeof(st_page_t) * m_pages);
 	return (true);
+}
+
+bool Libnorsim::initEraseBuffer() {
+	m_eraseBuffer.reset(new char[m_eraseSize]);
+	return (NULL != m_eraseBuffer.get());
 }
 
 void Libnorsim::initWeakPages() {
@@ -207,7 +222,7 @@ void Libnorsim::initWeakPages() {
 		return;
 	}
 
-	m_weakPages = parsePageType(env_weak_pages, ENV_WEAK_PAGES, "weak", &beh_weak, E_PAGE_WEAK);
+	m_weakPages = parsePageType(env_weak_pages, ENV_WEAK_PAGES, "weak", &m_behaviorWeak, E_PAGE_WEAK);
 }
 
 void Libnorsim::initGravePages() {
@@ -217,7 +232,7 @@ void Libnorsim::initGravePages() {
 		return;
 	}
 
-	m_gravePages = parsePageType(env_grave_pages, ENV_GRAVE_PAGES, "grave", &beh_grave, E_PAGE_GRAVE);
+	m_gravePages = parsePageType(env_grave_pages, ENV_GRAVE_PAGES, "grave", &m_behaviorGrave, E_PAGE_GRAVE);
 }
 
 void Libnorsim::initMtdInfo() {

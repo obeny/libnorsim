@@ -20,8 +20,6 @@
 #define SIGNAL_REPORT_SHORT 1
 #define SIGNAL_REPORT_DETAILED 2
 
-#define STATS_FILL(t,a,op) t.a##_##op = get_##a(t.a##_##op,m_pageInfo.get()[i].op)
-
 #include <memory>
 #include <mutex>
 
@@ -82,9 +80,16 @@ public:
 	std::mutex & getGlobalMutex() { return (m_mutex); }
 
 	char *getCacheFile() { return (m_cacheFile.get()); }
+	mtd_info_t *getMtdInfo() { return (&m_mtdInfo); }
+	st_page_t *getPageInfo() { return (m_pageInfo.get()); }
+	unsigned long getEraseSize() { return (m_eraseSize); }
+	e_beh_t getWeakPageBehavior() { return (m_behaviorWeak); }
+	e_beh_t getGravePageBehavior() { return (m_behaviorGrave); }
 
 	int getCacheFileFd() { return (m_cacheFileFd); }
 	void setCacheFileFd(int fd) { m_cacheFileFd = fd; }
+
+	char *getEraseBuffer() { return (m_eraseBuffer.get()); }
 
 	bool isOpened() { return (m_opened); }
 	void setOpened() { m_opened = true; }
@@ -103,6 +108,8 @@ private:
 	bool initCacheFile();
 	bool initSizes();
 	bool initPages();
+	bool initEraseBuffer();
+	
 	void initWeakPages();
 	void initGravePages();
 	void initMtdInfo();
@@ -124,6 +131,7 @@ private:
 	std::mutex m_mutex;
 
 	std::unique_ptr<char> m_cacheFile;
+	std::unique_ptr<char> m_eraseBuffer;
 	std::unique_ptr<st_page_t> m_pageInfo;
 	unsigned m_pages;
 	unsigned long m_size;
@@ -136,8 +144,8 @@ private:
 
 	mtd_info_t m_mtdInfo;
 
-	e_beh_t beh_weak;
-	e_beh_t beh_grave;
+	e_beh_t m_behaviorWeak;
+	e_beh_t m_behaviorGrave;
 };
 
 #endif // __LIBNORSIM_H__
