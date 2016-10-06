@@ -18,14 +18,14 @@ public:
 		WHITE
 	};
 
-	LogFormatterLibnorsim(bool colors)
-	 : m_colors(colors) {}
+	LogFormatterLibnorsim(const bool console)
+	 : m_console(console) {}
 	~LogFormatterLibnorsim() {}
 
-	const char* format(Loglevel loglevel, const char* msg, bool raw) {
+	const char* format(const Loglevel loglevel, const char* msg, const bool raw) {
 		if (raw)
 			return (msg);
-		if (m_colors) {
+		if (m_console) {
 			snprintf(m_formatBuffer, LOGGER_PRINTBUFFER_SIZE, "Libnorsim: %s%s%s%s%s\n",
 				getColor(getLoglevelColor(loglevel)),
 				getLoglevelString(loglevel),
@@ -40,7 +40,7 @@ public:
 	}
 
 private:
-	const char* getLoglevelString(Loglevel loglevel) {
+	const char* getLoglevelString(const Loglevel loglevel) {
 		switch (loglevel) {
 			case Loglevel::FATAL:
 				return "FATAL:   ";
@@ -58,7 +58,7 @@ private:
 				return ("");
 		}
 	}
-	Color getLoglevelColor(Loglevel loglevel) {
+	Color getLoglevelColor(const Loglevel loglevel) {
 		switch (loglevel) {
 			case Loglevel::FATAL:
 				return Color::LIGHT_RED;
@@ -76,7 +76,7 @@ private:
 				return Color::RESET;
 		}
 	}
-	const char* getColor(Color color) {
+	const char* getColor(const Color color) {
 		switch (color) {
 			case LIGHT_RED:
 				return "\e[1;31m";
@@ -97,7 +97,7 @@ private:
 		}
 	}
 
-	bool m_colors;
+	bool m_console;
 	char m_formatBuffer[LOGGER_PRINTBUFFER_SIZE];
 };
 
