@@ -30,7 +30,7 @@ __attribute__((destructor)) void libnorsim_destructor()
 }
 
 Libnorsim::Libnorsim() 
-	: m_initialized(false) {
+	: m_initialized(false), m_opened(false), m_cacheFileFd(-1) {
 	report_requested = 0;
 
 	initLogger();
@@ -63,6 +63,7 @@ Libnorsim::Libnorsim()
 err:
 	printUsage();
 	m_logger->log(Loglevel::DEBUG, "Libnorsim init FAILED!");
+	exit(-1);
 }
 
 Libnorsim::~Libnorsim() {

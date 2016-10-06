@@ -86,9 +86,10 @@ int main(int argc, char* argv[])
 	// printf("ret=%d\n", ret);
 
 	// hang if needed :)
-	if (argc > 1)
-		while(1) ioctl(fd, MEMUNLOCK, &ei);
+	if (argc > 1) {
+		while(1)
+			ioctl(fd, MEMUNLOCK, &ei);
+	}
 
 	close(fd);
-
 }

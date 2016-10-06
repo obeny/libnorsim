@@ -77,7 +77,18 @@ public:
 	SyscallsCache & getSyscallsCache() { return (*m_syscallsCache.get()); }
 	Logger& getLogger() { return (*m_logger.get()); }
 
+	bool isInitialized() { return (m_initialized); }
+
 	std::mutex & getGlobalMutex() { return (m_mutex); }
+
+	char *getCacheFile() { return (m_cacheFile.get()); }
+
+	int getCacheFileFd() { return (m_cacheFileFd); }
+	void setCacheFileFd(int fd) { m_cacheFileFd = fd; }
+
+	bool isOpened() { return (m_opened); }
+	void setOpened() { m_opened = true; }
+	void setClosed() { m_opened = false; }
 
 	void handleReportRequest();
 
@@ -106,6 +117,7 @@ private:
 	int parsePageEnv(const char * const str, e_page_type_t type);
 
 	bool m_initialized;
+	bool m_opened;
 	std::unique_ptr<LogFormatter> m_logFormatter;
 	std::unique_ptr<Logger> m_logger;
 	std::unique_ptr<SyscallsCache> m_syscallsCache;
@@ -119,6 +131,8 @@ private:
 
 	int m_weakPages;
 	int m_gravePages;
+
+	int m_cacheFileFd;
 
 	mtd_info_t m_mtdInfo;
 
