@@ -30,13 +30,14 @@ static int internal_ioctl(Libnorsim &libnorsim, int fd, unsigned long request, v
 int open(const char *path, int oflag, ...) {
 	Libnorsim &instance = Libnorsim::getInstance();
 	std::lock_guard<std::mutex> lg(instance.getGlobalMutex());
-	SYSCALL_PROLOGUE("open");
+	instance.handleReportRequest();
+	instance.getLogger().log(Loglevel::NOTE, "handling syscall: open(path=%s)", false, path);
 	int res;
 
 	char *realpath_buf = realpath(path, NULL);
 	va_list args;
 	va_start(args, oflag);
-	if (0 != strcmp(realpath_buf, instance.getCacheFile()))
+	if ((NULL == realpath_buf) || (0 != strcmp(realpath_buf, instance.getCacheFile())))
 		res = instance.getSyscallsCache().invokeOpen(path, oflag, args);
 	else
 		res = internal_open(instance, path, oflag, args);
@@ -44,6 +45,8 @@ int open(const char *path, int oflag, ...) {
 	va_end(args);
 	free(realpath_buf);
 	realpath_buf = NULL;
+
+	instance.getLogger().log(Loglevel::NOTE, "fd=%d", false, res);
 
 	return (res);
 }
@@ -192,6 +195,10 @@ err:
 static int internal_pread(Libnorsim &libnorsim, int fd, void *buf, size_t count, off_t offset) {
 	int ret = 0;
 	unsigned index = offset / libnorsim.getEraseSize();
+	unsigned index_in = offset - index * libnorsim.getEraseSize();
+
+	if ((index_in + count) > libnorsim.getEraseSize())
+		libnorsim.getLogger().log(Loglevel::WARNING, "Read block exceeds eraseblock boundary");
 
 	libnorsim.getPageInfo()[index].reads++;
 	if (E_PAGE_GRAVE == libnorsim.getPageInfo()[index].type) {
@@ -203,10 +210,6 @@ static int internal_pread(Libnorsim &libnorsim, int fd, void *buf, size_t count,
 				libnorsim.getLogger().log(Loglevel::DEBUG, "EIO error at page: %lu", false, index);
 				return (-1);
 			} else {
-				unsigned index_in = offset - index * libnorsim.getEraseSize();
-				if ((index_in + count) > libnorsim.getEraseSize()) {
-					libnorsim.getLogger().log(Loglevel::WARNING, "Read block exceeds eraseblock boundary");
-				}
 				ret = libnorsim.getSyscallsCache().invokePread(fd, buf, count, offset);
 				unsigned long rnd = rand() % count;
 				char rnd_byte = ((char*)buf)[rnd] ^ rnd;
@@ -224,7 +227,13 @@ static int internal_pread(Libnorsim &libnorsim, int fd, void *buf, size_t count,
 static int internal_pwrite(Libnorsim &libnorsim, int fd, const void *buf, size_t count, off_t offset) {
 	int ret = 0;
 	unsigned index = offset / libnorsim.getEraseSize();
+	unsigned index_in = offset - index * libnorsim.getEraseSize();
 	
+	if ((index_in + count) > libnorsim.getEraseSize()) {
+		libnorsim.getLogger().log(Loglevel::WARNING, "Write block exceeds eraseblock boundary");
+		return (-1);
+	}
+
 	libnorsim.getPageInfo()[index].writes++;
 	if (E_PAGE_WEAK == libnorsim.getPageInfo()[index].type) {
 		if (libnorsim.getPageInfo()[index].current_cycles < libnorsim.getPageInfo()[index].cycles) {
@@ -235,11 +244,6 @@ static int internal_pwrite(Libnorsim &libnorsim, int fd, const void *buf, size_t
 				libnorsim.getLogger().log(Loglevel::DEBUG, "EIO error at page: %lu", false, index);
 				return (-1);
 			} else {
-				unsigned index_in = offset - index * libnorsim.getEraseSize();
-				if ((index_in + count) > libnorsim.getEraseSize()) {
-					libnorsim.getLogger().log(Loglevel::WARNING, "Write block exceeds eraseblock boundary");
-					return (-1);
-				}
 				unsigned long rnd = rand() % count;
 				char rnd_byte = ((const char*)buf)[rnd] ^ rnd;
 				libnorsim.getLogger().log(Loglevel::DEBUG, "RND error at page: %lu[%lu], expected: 0x%02X, is 0x%02X", false, index, index_in + rnd, ((const char*)buf)[rnd], rnd_byte);
@@ -294,8 +298,12 @@ static int internal_ioctl_memerase(Libnorsim &libnorsim, int fd, va_list args) {
 		if (libnorsim.getPageInfo()[index].current_cycles < libnorsim.getPageInfo()[index].cycles) {
 			libnorsim.getPageInfo()[index].current_cycles++;
 			libnorsim.getPageInfo()[index].unlocked = 0;
-			return (libnorsim.getSyscallsCache().invokePwrite(
-				libnorsim.getCacheFileFd(), libnorsim.getEraseBuffer(), ei->length, ei->start));
+			if (libnorsim.getEraseSize() ==
+				libnorsim.getSyscallsCache().invokePwrite(libnorsim.getCacheFileFd(), libnorsim.getEraseBuffer(), ei->length, ei->start))
+				ret = 0;
+			else
+				ret = -1;
+			return (ret);
 		}
 		if (E_BEH_EIO == libnorsim.getWeakPageBehavior()) {
 			libnorsim.getLogger().log(Loglevel::DEBUG, "EIO error at page: %lu", false, index);
@@ -305,7 +313,10 @@ static int internal_ioctl_memerase(Libnorsim &libnorsim, int fd, va_list args) {
 			unsigned rnd = rand() % ei->length;
 			libnorsim.getLogger().log(Loglevel::DEBUG, "RND error at page: %lu[%d] = 0x%02X", false, index, rnd, (~rnd) & 0xFF);
 			libnorsim.getEraseBuffer()[rnd] = ~rnd;
-			ret = libnorsim.getSyscallsCache().invokePwrite(fd, libnorsim.getEraseBuffer(), ei->length, ei->start);
+			if (libnorsim.getEraseSize() == libnorsim.getSyscallsCache().invokePwrite(fd, libnorsim.getEraseBuffer(), ei->length, ei->start))
+				ret = 0;
+			else
+				ret = -1;
 			libnorsim.getEraseBuffer()[rnd] = 0xFF;
 		}
 		libnorsim.getPageInfo()[index].unlocked = 0;

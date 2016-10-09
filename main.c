@@ -2,6 +2,8 @@
 // NS_SIZE=65536 NS_ERASE_SIZE=256 NS_WEAK_PAGES="rnd 0,1;" NS_GRAVE_PAGES="rnd 3,1;"
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
 
@@ -11,18 +13,28 @@
 int main(int argc, char* argv[])
 {
 	(void)argv;
+	setenv("NS_SIZE", "65536", 1);
+	setenv("NS_ERASE_SIZE", "256", 1);
+	setenv("NS_WEAK_PAGES", "eio 0,2;", 1);
+	setenv("NS_GRAVE_PAGES", "eio 3,1;", 1);
+	setenv("NS_CACHE_FILE", "/tmp/nor", 1);
 
 	puts("running main");
 	char buf[512*1024];
-	int fd = open("/tmp/nor", O_RDWR);
+	int fd;
+
+	fd = open("non_existing_file", O_RDWR);
+	printf("non_existing_file fd=%d\n", fd);
+
+	fd = open("/tmp/nor", O_RDWR);
+	printf("cache_file fd=%d\n", fd);
+
 	int read_bytes;
 	int written_bytes;
 	int ret;
 
 	mtd_info_t mtd_info;
 	erase_info_t ei;
-
-	printf("fd=%d\n", fd);
 
 	// memgetinfo
 	ioctl(fd, MEMGETINFO, &mtd_info);
@@ -33,74 +45,95 @@ int main(int argc, char* argv[])
 	printf("mtd_info.writesize=%d\n", mtd_info.writesize);
 	printf("mtd_info.oobsize=%d\n", mtd_info.oobsize);
 
-	// erasing - invalid ei
+	// erasing - invalid ei (start)
+	printf("erase - invalid ei (start)\n");
 	ei.start = 1;
 	ei.length = 256 * 1024;
 	ret = ioctl(fd, MEMUNLOCK, &ei);
-	printf("ret=%d\n", ret);
+	printf("ioctl MEMUNLOCK ret=%d\n", ret);
 	ret = ioctl(fd, MEMERASE, &ei);
-	printf("ret=%d\n", ret);
+	printf("ioctl MEMERASE ret=%d\n", ret);
 
+	// erasing - invalid ei (length)
+	printf("erase - invalid ei (length)\n");
 	ei.start = 256 * 1024;
 	ei.length = 1;
 	ret = ioctl(fd, MEMUNLOCK, &ei);
-	printf("ret=%d\n", ret);
+	printf("ioctl MEMUNLOCK ret=%d\n", ret);
 	ret = ioctl(fd, MEMERASE, &ei);
-	printf("ret=%d\n", ret);
-
-	// erasing weak page (cycles=1)
-	ei.start = 0;
-	ei.length = 256 * 1024;
-	ret = ioctl(fd, MEMUNLOCK, &ei);
-	printf("ret=%d\n", ret);
-	ret = ioctl(fd, MEMERASE, &ei);
-	printf("ret=%d\n", ret);
-
-	// erasing worn page
-	ret = ioctl(fd, MEMUNLOCK, &ei);
-	printf("ret=%d\n", ret);
-	ret = ioctl(fd, MEMERASE, &ei);
-	printf("ret=%d\n", ret);
+	printf("ioctl MEMERASE ret=%d\n", ret);
 
 	// erasing without unlocking
+	ei.start = 0;
+	ei.length = 256 * 1024;
+	printf("erase - without unlocking\n");
 	ret = ioctl(fd, MEMERASE, &ei);
-	printf("ret=%d\n", ret);
+	printf("ioctl MEMERASE ret=%d\n", ret);
 
-	// read - worn page
-	read_bytes = pread(fd, buf, 128, 0);
+	// writing to weak page (cycles=1/2)
+	printf("writing to weak page (cycles=1/2)\n");
+	memset(buf, 0x00, 256 * 1024);
+	written_bytes = pwrite(fd, buf, ei.length, ei.start);
+	printf("written ret=%d zeros\n", written_bytes);
+	read_bytes = pread(fd, buf, 256*1024, ei.start);
+	printf("read ret=%d zeros\n", read_bytes);
+	for (long i = 0; i < (256 * 1024); ++i){
+		if (0 != buf[i])
+			printf("unexpected value found, should be zero\n");
+	}
+
+	// erasing weak page (cycles=2/2)
+	printf("erase weak page (cycles=2/2)\n");
+	ret = ioctl(fd, MEMUNLOCK, &ei);
+	printf("ioctl MEMUNLOCK ret=%d\n", ret);
+	ret = ioctl(fd, MEMERASE, &ei);
+	printf("ioctl MEMERASE ret=%d\n", ret);
+
+	// erasing worn page
+	printf("erase worn page (cycles=3/2)\n");
+	ret = ioctl(fd, MEMUNLOCK, &ei);
+	printf("ioctl MEMUNLOCK ret=%d\n", ret);
+	ret = ioctl(fd, MEMERASE, &ei);
+	printf("ioctl MEMERASE ret=%d\n", ret);
+
+	// writing worn page
+	printf("writing worn page (cycles=4/2)\n");
+	written_bytes = pwrite(fd, buf, ei.length, ei.start);
+	printf("written ret=%d zeros\n", written_bytes);
+	read_bytes = pread(fd, buf, 256*1024, ei.start);
+	printf("read ret=%d zeros\n", read_bytes);
+	for (long i = 0; i < (256 * 1024); ++i){
+		if (0 != buf[i])
+			printf("unexpected value found, should be zero\n");
+	}
+
+	// write block exceeding erasepage boundary
+	printf("write block exceeding erasepage boundary\n");
+	written_bytes = pwrite(fd, buf, 256 * 1024 * 2, 256 * 1024);
+	printf("written_bytes=%d\n", written_bytes);
+
+	// read block exceeding erasepage boundary
+	printf("read block exceeding erasepage boundary\n");
+	read_bytes = pread(fd, buf, 256 * 1024 * 2, 256 * 1024);
 	printf("read_bytes=%d\n", read_bytes);
-	
+
 	// read grave page (cycles=1)
+	printf("read grave page (cycles=1/1)\n");
 	read_bytes = pread(fd, buf, 128, 256 * 3 * 1024);
 	printf("read_bytes=%d\n", read_bytes);
 
 	// read graved page
+	printf("read graved page (cycles=2/1)\n");
 	read_bytes = pread(fd, buf, 128, 256 * 3 * 1024);
 	printf("read_bytes=%d\n", read_bytes);
 
-	// read block exceeding erasepage boundary
-	read_bytes = pread(fd, buf, 256 * 1024 * 2, 256 * 3 * 1024);
-	printf("read_bytes=%d\n", read_bytes);
-
-	// write
-	written_bytes = pwrite(fd, buf, 128, 256 * 1024);
-	printf("written_bytes=%d\n", written_bytes);
-
-	// write worn page
-	written_bytes = pwrite(fd, buf, 128, 0);
-	printf("written_bytes=%d\n", written_bytes);
-
-	// write block exceeding erasepage boundary
-	written_bytes = pwrite(fd, buf, 256 * 1024 * 2, 0);
-	printf("written_bytes=%d\n", written_bytes);
-
 	// read
 	ret = read(fd, buf, 1);
-	printf("ret=%d\n", ret);
+	printf("read ret=%d\n", ret);
 
 	// write
 	ret = write(fd, buf, 1);
-	printf("ret=%d\n", ret);
+	printf("write ret=%d\n", ret);
 
 	// hang if needed :)
 	if (argc > 1) {
