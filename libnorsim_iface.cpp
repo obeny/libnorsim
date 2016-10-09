@@ -54,10 +54,11 @@ int open(const char *path, int oflag, ...) {
 int close(int fd) {
 	Libnorsim &instance = Libnorsim::getInstance();
 	std::lock_guard<std::mutex> lg(instance.getGlobalMutex());
-	SYSCALL_PROLOGUE("close");
+	instance.handleReportRequest();
+	instance.getLogger().log(Loglevel::NOTE, "handling syscall: close(fd=%d)", false, fd);
 	int res;
 
-	if (fd != instance.getCacheFileFd())
+	if (!instance.isOpened() || (fd != instance.getCacheFileFd()))
 		res = instance.getSyscallsCache().invokeClose(fd);
 	else
 		res = internal_close(instance, fd);
@@ -281,7 +282,7 @@ static int internal_ioctl_memunlock(Libnorsim &libnorsim, va_list args) {
 	return (0);
 }
 
-static int internal_ioctl_memerase(Libnorsim &libnorsim, int fd, va_list args) {
+static int internal_ioctl_memerase(Libnorsim &libnorsim, va_list args) {
 	int ret = 0;
 	erase_info_t *ei = va_arg(args, erase_info_t*);
 	unsigned index = (ei->start) / libnorsim.getEraseSize();
@@ -305,19 +306,24 @@ static int internal_ioctl_memerase(Libnorsim &libnorsim, int fd, va_list args) {
 				ret = -1;
 			return (ret);
 		}
-		if (E_BEH_EIO == libnorsim.getWeakPageBehavior()) {
-			libnorsim.getLogger().log(Loglevel::DEBUG, "EIO error at page: %lu", false, index);
-			libnorsim.getPageInfo()[index].unlocked = 0;
-			return (-1);
+		if (E_PAGE_WEAK == libnorsim.getPageInfo()[index].type) {
+			if (E_BEH_EIO == libnorsim.getWeakPageBehavior()) {
+				libnorsim.getLogger().log(Loglevel::DEBUG, "EIO error at page: %lu", false, index);
+				libnorsim.getPageInfo()[index].unlocked = 0;
+				return (-1);
+			} else {
+				unsigned rnd = rand() % ei->length;
+				libnorsim.getLogger().log(Loglevel::DEBUG, "RND error at page: %lu[%d] = 0x%02X", false, index, rnd, (~rnd) & 0xFF);
+				libnorsim.getEraseBuffer()[rnd] = ~rnd;
+				if (libnorsim.getEraseSize() ==\
+					libnorsim.getSyscallsCache().invokePwrite(libnorsim.getCacheFileFd(), libnorsim.getEraseBuffer(), ei->length, ei->start))
+					ret = 0;
+				else
+					ret = -1;
+				libnorsim.getEraseBuffer()[rnd] = 0xFF;
+			}
 		} else {
-			unsigned rnd = rand() % ei->length;
-			libnorsim.getLogger().log(Loglevel::DEBUG, "RND error at page: %lu[%d] = 0x%02X", false, index, rnd, (~rnd) & 0xFF);
-			libnorsim.getEraseBuffer()[rnd] = ~rnd;
-			if (libnorsim.getEraseSize() == libnorsim.getSyscallsCache().invokePwrite(fd, libnorsim.getEraseBuffer(), ei->length, ei->start))
-				ret = 0;
-			else
-				ret = -1;
-			libnorsim.getEraseBuffer()[rnd] = 0xFF;
+			return (libnorsim.getSyscallsCache().invokePwrite(libnorsim.getCacheFileFd(), libnorsim.getEraseBuffer(), ei->length, ei->start));
 		}
 		libnorsim.getPageInfo()[index].unlocked = 0;
 	} else {
@@ -329,10 +335,11 @@ static int internal_ioctl_memerase(Libnorsim &libnorsim, int fd, va_list args) {
 }
 
 static int internal_ioctl(Libnorsim &libnorsim, int fd, unsigned long request, va_list args) {
+	(void)fd;
 	switch (request) {
 		case MEMGETINFO: return (internal_ioctl_memgetinfo(libnorsim, args));
 		case MEMUNLOCK: return (internal_ioctl_memunlock(libnorsim, args));
-		case MEMERASE: return (internal_ioctl_memerase(libnorsim, fd, args));
+		case MEMERASE: return (internal_ioctl_memerase(libnorsim, args));
 	}
 	return (-1);
 }

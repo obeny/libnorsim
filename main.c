@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>
 
@@ -22,16 +23,25 @@ int main(int argc, char* argv[])
 	puts("running main");
 	char buf[512*1024];
 	int fd;
+	int ret;
 
 	fd = open("non_existing_file", O_RDWR);
 	printf("non_existing_file fd=%d\n", fd);
 
+	unlink("/tmp/nor_tmp");
+	fd = open("/tmp/nor_tmp", O_CREAT | O_WRONLY, S_IRUSR);
+	printf("nor_tmp fd=%d\n", fd);
+	ret = close(fd);
+
+	fd = open("/tmp/nor", O_RDWR);
+	printf("cache_file fd=%d\n", fd);
+	ret = close(fd);
+	printf("ret=%d\n", ret);
 	fd = open("/tmp/nor", O_RDWR);
 	printf("cache_file fd=%d\n", fd);
 
 	int read_bytes;
 	int written_bytes;
-	int ret;
 
 	mtd_info_t mtd_info;
 	erase_info_t ei;
