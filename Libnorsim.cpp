@@ -301,20 +301,20 @@ void Libnorsim::printPageReport(bool detailed)
 				}
 				break;
 			case E_PAGE_WEAK:
-				m_logger->log(Loglevel::ALWAYS, "\tPage %5u: W(cycles=%u, remaining=%u, reads=%lu, writes=%lu, erases=%lu)", false,
+				m_logger->log(Loglevel::ALWAYS, "\tPage %5u: W(limit=%u, remaining=%u, reads=%lu, writes=%lu, erases=%lu)", false,
 					i,
-					m_pageInfo.get()[i].cycles,
-					m_pageInfo.get()[i].cycles - m_pageInfo.get()[i].current_cycles,
+					m_pageInfo.get()[i].limit,
+					m_pageInfo.get()[i].limit - m_pageInfo.get()[i].erases,
 					m_pageInfo.get()[i].reads,
 					m_pageInfo.get()[i].writes,
 					m_pageInfo.get()[i].erases
 				);
 				break;
 			case E_PAGE_GRAVE:
-				m_logger->log(Loglevel::ALWAYS, "\tPage %5u: G(cycles=%u, remaining=%u, reads=%lu, writes=%lu, erases=%lu)", false,
+				m_logger->log(Loglevel::ALWAYS, "\tPage %5u: G(limit=%u, remaining=%u, reads=%lu, writes=%lu, erases=%lu)", false,
 					i,
-					m_pageInfo.get()[i].cycles,
-					m_pageInfo.get()[i].cycles - m_pageInfo.get()[i].current_cycles,
+					m_pageInfo.get()[i].limit,
+					m_pageInfo.get()[i].limit - m_pageInfo.get()[i].reads,
 					m_pageInfo.get()[i].reads,
 					m_pageInfo.get()[i].writes,
 					m_pageInfo.get()[i].erases
@@ -424,7 +424,7 @@ int Libnorsim::parsePageEnv(const char * const str, e_page_type_t type) {
 	char *end_node;
 	char *end_prop;
 	int count = -1;
-	unsigned cycles;
+	unsigned limit;
 	unsigned long page;
 
 	if (0 == str[0])
@@ -439,9 +439,9 @@ int Libnorsim::parsePageEnv(const char * const str, e_page_type_t type) {
 
 		page = strtoul(cur_node, &end_prop, 10);
 		cur_prop = ++end_prop;
-		cycles = strtoul(cur_prop, NULL, 10);
-		m_logger->log(Loglevel::DEBUG, "\t(%c)\tpage=%lu\tcycles=%u", false,
-			type_sign, page, cycles
+		limit = strtoul(cur_prop, NULL, 10);
+		m_logger->log(Loglevel::DEBUG, "\t(%c)\tpage=%lu\tlimit=%u", false,
+			type_sign, page, limit
 		);
 		if (page > m_pages) {
 			m_logger->log(Loglevel::ERROR, "\t(%c)\ttrying to set non existing page (page=%lu > pages=%lu)", false,
@@ -450,7 +450,7 @@ int Libnorsim::parsePageEnv(const char * const str, e_page_type_t type) {
 			return -1;
 		}
 		m_pageInfo.get()[page].type = type;
-		m_pageInfo.get()[page].cycles = cycles;
+		m_pageInfo.get()[page].limit = limit;
 
 		if (-1 == count)
 			count = 0;

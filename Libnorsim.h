@@ -22,6 +22,7 @@
 
 #include <memory>
 #include <mutex>
+#include <set>
 
 #include <mtd/mtd-user.h>
 
@@ -43,12 +44,13 @@ typedef enum
 typedef struct
 {
 	e_page_type_t type;
-	unsigned short cycles;
-	unsigned short current_cycles;
+	unsigned short limit;
 	unsigned long reads;
 	unsigned long writes;
 	unsigned long erases;
-	unsigned unlocked;
+	char *image;
+	// std::set<> deadBits;
+	bool unlocked;
 } st_page_t;
 
 typedef struct

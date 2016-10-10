@@ -26,13 +26,13 @@ class SyscallsCache {
 			return (ret);
 		}
 
-		open_ptr_t m_openSC;
-		close_ptr_t m_closeSC;
-		pread_ptr_t m_preadSC;
-		pwrite_ptr_t m_pwriteSC;
-		read_ptr_t m_readSC;
-		write_ptr_t m_writeSC;
-		ioctl_ptr_t m_ioctlSC;
+		open_ptr_t openSC;
+		close_ptr_t closeSC;
+		pread_ptr_t preadSC;
+		pwrite_ptr_t pwriteSC;
+		read_ptr_t readSC;
+		write_ptr_t writeSC;
+		ioctl_ptr_t ioctlSC;
 
 	private:
 		int m_lastErrno;
@@ -48,19 +48,19 @@ private:
 
 public:
 	int invokeOpen(const char *path, int oflag, mode_t mode)
-		{ return (m_syscalls.invoke<Syscalls::open_ptr_t>(m_syscalls.m_openSC, path, oflag, mode)); }
+		{ return (m_syscalls.invoke<Syscalls::open_ptr_t>(m_syscalls.openSC, path, oflag, mode)); }
 	int invokeClose(int fd)
-		{ return (m_syscalls.invoke<Syscalls::close_ptr_t>(m_syscalls.m_closeSC, fd)); }
+		{ return (m_syscalls.invoke<Syscalls::close_ptr_t>(m_syscalls.closeSC, fd)); }
 	size_t invokePread(int fd, void *buf, size_t count, off_t offset)
-		{ return (m_syscalls.invoke<Syscalls::pread_ptr_t>(m_syscalls.m_preadSC, fd, buf, count, offset)); }
+		{ return (m_syscalls.invoke<Syscalls::pread_ptr_t>(m_syscalls.preadSC, fd, buf, count, offset)); }
 	size_t invokePwrite(int fd, const void *buf, size_t count, off_t offset)
-		{ return (m_syscalls.invoke<Syscalls::pwrite_ptr_t>(m_syscalls.m_pwriteSC, fd, buf, count, offset)); }
+		{ return (m_syscalls.invoke<Syscalls::pwrite_ptr_t>(m_syscalls.pwriteSC, fd, buf, count, offset)); }
 	size_t invokeRead(int fd, void *buf, size_t count)
-		{ return (m_syscalls.invoke<Syscalls::read_ptr_t>(m_syscalls.m_readSC, fd, buf, count)); }
+		{ return (m_syscalls.invoke<Syscalls::read_ptr_t>(m_syscalls.readSC, fd, buf, count)); }
 	size_t invokeWrite(int fd, const void *buf, size_t count)
-		{ return (m_syscalls.invoke<Syscalls::write_ptr_t>(m_syscalls.m_writeSC, fd, buf, count)); }
+		{ return (m_syscalls.invoke<Syscalls::write_ptr_t>(m_syscalls.writeSC, fd, buf, count)); }
 	int invokeIoctl(int fd, unsigned long request, va_list args)
-		{ return (m_syscalls.invoke<Syscalls::ioctl_ptr_t>(m_syscalls.m_ioctlSC, fd, request, args)); }
+		{ return (m_syscalls.invoke<Syscalls::ioctl_ptr_t>(m_syscalls.ioctlSC, fd, request, args)); }
 };
 
 #endif // __SYSCALSSCACHE_H__

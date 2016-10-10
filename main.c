@@ -80,19 +80,26 @@ int main(int argc, char* argv[])
 	ret = ioctl(fd, MEMERASE, &ei);
 	printf("ioctl MEMERASE ret=%d\n", ret);
 
-	// writing to weak page (cycles=1/2)
+	// erasing with unlocking
+	printf("erase - with unlocking (cycles=1/2)\n");
+	ret = ioctl(fd, MEMUNLOCK, &ei);
+	printf("ioctl MEMUNLOCK ret=%d\n", ret);
+	ret = ioctl(fd, MEMERASE, &ei);
+	printf("ioctl MEMERASE ret=%d\n", ret);
+
+	// writing to weak page
 	printf("writing to weak page (cycles=1/2)\n");
-	memset(buf, 0x00, 256 * 1024);
+	memset(buf, 0xA5, 256 * 1024);
 	written_bytes = pwrite(fd, buf, ei.length, ei.start);
 	printf("written ret=%d zeros\n", written_bytes);
 	read_bytes = pread(fd, buf, 256*1024, ei.start);
 	printf("read ret=%d zeros\n", read_bytes);
 	for (long i = 0; i < (256 * 1024); ++i){
-		if (0 != buf[i])
-			printf("unexpected value found, should be zero\n");
+		if ((char)0xA5!= buf[i])
+			printf("unexpected value found, should be 0xA5\n");
 	}
 
-	// erasing weak page (cycles=2/2)
+	// erasing weak page
 	printf("erase weak page (cycles=2/2)\n");
 	ret = ioctl(fd, MEMUNLOCK, &ei);
 	printf("ioctl MEMUNLOCK ret=%d\n", ret);
@@ -107,14 +114,14 @@ int main(int argc, char* argv[])
 	printf("ioctl MEMERASE ret=%d\n", ret);
 
 	// writing worn page
-	printf("writing worn page (cycles=4/2)\n");
+	printf("writing worn page (cycles=3/2)\n");
 	written_bytes = pwrite(fd, buf, ei.length, ei.start);
-	printf("written ret=%d zeros\n", written_bytes);
+	printf("written ret=%d bytes\n", written_bytes);
 	read_bytes = pread(fd, buf, 256*1024, ei.start);
-	printf("read ret=%d zeros\n", read_bytes);
+	printf("read ret=%d bytes\n", read_bytes);
 	for (long i = 0; i < (256 * 1024); ++i){
 		if ((char)0xFF != buf[i])
-			printf("unexpected value found, should be 0xFF\n");
+			printf("unexpected value found: 0x%X, should be: 0xFF\n", (char)buf[i]);
 	}
 
 	// write block exceeding erasepage boundary
@@ -127,7 +134,7 @@ int main(int argc, char* argv[])
 	read_bytes = pread(fd, buf, 256 * 1024 * 2, 256 * 1024);
 	printf("read_bytes=%d\n", read_bytes);
 
-	// read grave page (cycles=1)
+	// read grave page
 	printf("read grave page (cycles=1/1)\n");
 	read_bytes = pread(fd, buf, 128, 256 * 3 * 1024);
 	printf("read_bytes=%d\n", read_bytes);
