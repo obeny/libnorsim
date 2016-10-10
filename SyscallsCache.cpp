@@ -44,38 +44,44 @@ SyscallsCache::SyscallsCache(Libnorsim *libnorsim)
 		m_libnorsim->getLogger().log(Loglevel::DEBUG, "SyscallsCache init OK");
 }
 
-bool SyscallsCache::isOk() {
-	return (m_initialized);
-}
-
-int SyscallsCache::invokeOpen(const char *path, int oflag, ...) {
-	va_list args;
-	va_start(args, oflag);
-	return (m_openSC(path, oflag, args));
+int SyscallsCache::invokeOpen(const char *path, int oflag, mode_t mode) {
+	int ret = m_openSC(path, oflag, mode);
+	m_lastErrno = errno;
+	return (ret);
 }
 
 int SyscallsCache::invokeClose(int fd) {
-	return (m_closeSC(fd));
+	int ret = m_closeSC(fd);
+	m_lastErrno = errno;
+	return (ret);
 }
 
 size_t SyscallsCache::invokePread(int fd, void *buf, size_t count, off_t offset){
-	return (m_preadSC(fd, buf, count, offset));
+	int ret = m_preadSC(fd, buf, count, offset);
+	m_lastErrno = errno;
+	return (ret);
 }
 
 size_t SyscallsCache::invokePwrite(int fd, const void *buf, size_t count, off_t offset) {
-	return (m_pwriteSC(fd, buf, count, offset));
+	int ret = m_pwriteSC(fd, buf, count, offset);
+	m_lastErrno = errno;
+	return (ret);
 }
 
 size_t SyscallsCache::invokeRead(int fd, void *buf, size_t count) {
-	return (m_readSC(fd, buf, count));
+	int ret = m_readSC(fd, buf, count);
+	m_lastErrno = errno;
+	return (ret);
 }
 
 size_t SyscallsCache::invokeWrite(int fd, const void *buf, size_t count) {
-	return (m_writeSC(fd, buf, count));
+	int ret = m_writeSC(fd, buf, count);
+	m_lastErrno = errno;
+	return (ret);
 }
 
-int SyscallsCache::invokeIoctl(int fd, unsigned long request, ...) {
-	va_list args;
-	va_start(args, request);
-	return (m_ioctlSC(fd, request, args));
+int SyscallsCache::invokeIoctl(int fd, unsigned long request, va_list args) {
+	int ret = m_ioctlSC(fd, request, args);
+	m_lastErrno = errno;
+	return (ret);
 }

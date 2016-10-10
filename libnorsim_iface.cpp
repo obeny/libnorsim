@@ -21,7 +21,7 @@ extern "C" {
 
 volatile sig_atomic_t report_requested = 0;
 
-static int internal_open(Libnorsim &libnorsim, const char *path, int oflag, va_list args);
+static int internal_open(Libnorsim &libnorsim, const char *path, int oflag, mode_t mode);
 static int internal_close(Libnorsim &libnorsim, int fd);
 static int internal_pread(Libnorsim &libnorsim, int fd, void *buf, size_t count, off_t offset);
 static int internal_pwrite(Libnorsim &libnorsim, int fd, const void *buf, size_t count, off_t offset);
@@ -31,18 +31,26 @@ int open(const char *path, int oflag, ...) {
 	Libnorsim &instance = Libnorsim::getInstance();
 	std::lock_guard<std::mutex> lg(instance.getGlobalMutex());
 	instance.handleReportRequest();
-	instance.getLogger().log(Loglevel::NOTE, "handling syscall: open(path=%s)", false, path);
+
+	mode_t mode;
+	va_list args;
+	va_start(args, oflag);
+	if (oflag & O_CREAT)
+		mode = va_arg(args, mode_t);
+	else
+		mode = 0;
+	va_end(args);
+
+	instance.getLogger().log(Loglevel::NOTE, "handling syscall: open(path=%s, oflag=0x%X, mode=0x%X)", false, path, oflag, mode);
 	int res;
 
 	char *realpath_buf = realpath(path, NULL);
-	va_list args;
-	va_start(args, oflag);
-	if ((NULL == realpath_buf) || (0 != strcmp(realpath_buf, instance.getCacheFile())))
-		res = instance.getSyscallsCache().invokeOpen(path, oflag, args);
-	else
-		res = internal_open(instance, path, oflag, args);
 
-	va_end(args);
+	if ((NULL == realpath_buf) || (0 != strcmp(realpath_buf, instance.getCacheFile())))
+		res = instance.getSyscallsCache().invokeOpen(path, oflag, mode);
+	else
+		res = internal_open(instance, path, oflag, mode);
+
 	free(realpath_buf);
 	realpath_buf = NULL;
 
@@ -138,21 +146,18 @@ void sig_handler(int signum)
 	}
 }
 
-static int internal_open(Libnorsim &libnorsim, const char *path, int oflag, va_list args) {
-	int errno_cpy;
+static int internal_open(Libnorsim &libnorsim, const char *path, int oflag, mode_t mode) {
 	int ret;
 
 	if (!libnorsim.isOpened()) {
-		ret = libnorsim.getSyscallsCache().invokeOpen(path, oflag, args);
+		ret = libnorsim.getSyscallsCache().invokeOpen(path, oflag, mode);
 		if (ret < 0) {
-			errno_cpy = errno;
-			libnorsim.getLogger().log(Loglevel::FATAL, "Couldn't open cache file: %s, errno=%d", false, path, errno_cpy);
+			libnorsim.getLogger().log(Loglevel::FATAL, "Couldn't open cache file: %s, errno=%d", false, path, libnorsim.getSyscallsCache().getLastErrno());
 			goto err;
 		}
 		libnorsim.setCacheFileFd(ret);
 		if (flock(libnorsim.getCacheFileFd(), LOCK_EX) < 0) {
-			errno_cpy = errno;
-			libnorsim.getLogger().log(Loglevel::FATAL, "Error while acquiring lock on cache file: %s, errno=%d", false, path, errno_cpy);
+			libnorsim.getLogger().log(Loglevel::FATAL, "Error while acquiring lock on cache file: %s, errno=%d", false, path, libnorsim.getSyscallsCache().getLastErrno());
 			goto err;
 		}
 		libnorsim.setOpened();
@@ -169,14 +174,12 @@ err:
 }
 
 static int internal_close(Libnorsim &libnorsim, int fd) {
-	int errno_cpy;
 	int ret;
 
 	if (libnorsim.isOpened()) {
 		ret = libnorsim.getSyscallsCache().invokeClose(fd);
 		if (ret < 0) {
-			errno_cpy = errno;
-			libnorsim.getLogger().log(Loglevel::FATAL, "Error while closing cache file: %s, errno=%d", false, libnorsim.getCacheFile(), errno_cpy);
+			libnorsim.getLogger().log(Loglevel::FATAL, "Error while closing cache file: %s, errno=%d", false, libnorsim.getCacheFile(), libnorsim.getSyscallsCache().getLastErrno());
 			goto err;
 		}
 		libnorsim.setClosed();
@@ -287,7 +290,7 @@ static int internal_ioctl_memerase(Libnorsim &libnorsim, va_list args) {
 	erase_info_t *ei = va_arg(args, erase_info_t*);
 	unsigned index = (ei->start) / libnorsim.getEraseSize();
 	libnorsim.getLogger().log(Loglevel::DEBUG, "Got MEMERASE request at page: %d", false, index);
-	
+
 	if ((0 != (ei->start % libnorsim.getEraseSize()) || 0 != (ei->length % libnorsim.getEraseSize()))) {
 		libnorsim.getLogger().log(Loglevel::WARNING, "Invalid erase_info_t, start=0x%04lX, length=0x%04lX",
 			false, (unsigned long)ei->start, (unsigned long)ei->length);
@@ -323,7 +326,11 @@ static int internal_ioctl_memerase(Libnorsim &libnorsim, va_list args) {
 				libnorsim.getEraseBuffer()[rnd] = 0xFF;
 			}
 		} else {
-			return (libnorsim.getSyscallsCache().invokePwrite(libnorsim.getCacheFileFd(), libnorsim.getEraseBuffer(), ei->length, ei->start));
+			if (libnorsim.getEraseSize() ==
+				libnorsim.getSyscallsCache().invokePwrite(libnorsim.getCacheFileFd(), libnorsim.getEraseBuffer(), ei->length, ei->start))
+				return (0);
+			else
+				return (-1);
 		}
 		libnorsim.getPageInfo()[index].unlocked = 0;
 	} else {

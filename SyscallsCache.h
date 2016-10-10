@@ -1,6 +1,8 @@
 #ifndef __SYSCALLSCACHE_H__
 #define __SYSCALLSCACHE_H__
 
+#include <sys/stat.h>
+
 class Libnorsim;
 
 class SyscallsCache {
@@ -15,18 +17,20 @@ class SyscallsCache {
 public:
 	SyscallsCache(Libnorsim *libnorsom);
 
-	bool isOk();
+	bool isOk() { return (m_initialized); }
+	int getLastErrno() { return (m_lastErrno); }
 
-	int invokeOpen(const char *path, int oflag, ...);
+	int invokeOpen(const char *path, int oflag, mode_t mode);
 	int invokeClose(int fd);
 	size_t invokePread(int fd, void *buf, size_t count, off_t offset);
 	size_t invokePwrite(int fd, const void *buf, size_t count, off_t offset);
 	size_t invokeRead(int fd, void *buf, size_t count);
 	size_t invokeWrite(int fd, const void *buf, size_t count);
-	int invokeIoctl(int fd, unsigned long request, ...);
+	int invokeIoctl(int fd, unsigned long request, va_list args);
 
 private:
 	bool m_initialized;
+	int m_lastErrno;
 
 	open_ptr_t m_openSC;
 	close_ptr_t m_closeSC;

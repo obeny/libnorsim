@@ -29,7 +29,7 @@ int main(int argc, char* argv[])
 	printf("non_existing_file fd=%d\n", fd);
 
 	unlink("/tmp/nor_tmp");
-	fd = open("/tmp/nor_tmp", O_CREAT | O_WRONLY, S_IRUSR);
+	fd = open("/tmp/nor_tmp", O_RDWR | O_CREAT | O_APPEND | O_CLOEXEC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
 	printf("nor_tmp fd=%d\n", fd);
 	ret = close(fd);
 
@@ -113,8 +113,8 @@ int main(int argc, char* argv[])
 	read_bytes = pread(fd, buf, 256*1024, ei.start);
 	printf("read ret=%d zeros\n", read_bytes);
 	for (long i = 0; i < (256 * 1024); ++i){
-		if (0 != buf[i])
-			printf("unexpected value found, should be zero\n");
+		if ((char)0xFF != buf[i])
+			printf("unexpected value found, should be 0xFF\n");
 	}
 
 	// write block exceeding erasepage boundary
