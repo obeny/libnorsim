@@ -26,7 +26,7 @@ unsigned long get_max(unsigned long g, unsigned long p);
 
 __attribute__((constructor)) void libnorsim_constructor()
 {
-	printf("libnorsim, version: %s initialized\n", VERSION);
+	printf("libnorsim, version: %s loaded\n", VERSION);
 	puts("waiting for \"open\" syscall to start...");
 	fflush(stdout);
 }
@@ -152,7 +152,7 @@ bool Libnorsim::initSyscallsCache() {
 		return (false);
 	}
 	if (NULL == m_syscallsCache.get()) {
-		m_logger->log(Loglevel::FATAL, "SyscallsCache init failed");
+		m_logger->log(Loglevel::FATAL, "SyscallsCache init FAILED!");
 		return (false);
 	}
 	m_logger->log(Loglevel::DEBUG, "SyscallsCache init OK");
@@ -192,7 +192,7 @@ bool Libnorsim::initSizes() {
 	stat(m_cacheFile.get(), &st);
 	unsigned long cache_file_size = st.st_size;
 	if (m_size != cache_file_size) {
-		m_logger->log(Loglevel::FATAL, "Given flash size and cache_file sizes differs (%lukB != %lukB)",
+		m_logger->log(Loglevel::FATAL, "Given flash size and cache file sizes differs (%lukB != %lukB)",
 			false, m_size / 1024, cache_file_size / 1024);
 		return (false);
 	}
@@ -203,7 +203,7 @@ bool Libnorsim::initSizes() {
 		return (false);
 	}
 	m_eraseSize = (unsigned)strtoul(env_erase_size, NULL, 10) * 1024;
-	m_logger->log(Loglevel::INFO, "Set erase_size: 0x%lX (%lukB)", false, m_eraseSize, m_eraseSize / 1024);
+	m_logger->log(Loglevel::INFO, "Set erase size: 0x%lX (%lukB)", false, m_eraseSize, m_eraseSize / 1024);
 
 	return (true);
 }
@@ -231,7 +231,7 @@ bool Libnorsim::initEraseBuffer() {
 void Libnorsim::initWeakPages() {
 	char *env_weak_pages = getenv(ENV_WEAK_PAGES);
 	if (!env_weak_pages) {
-		m_logger->log(Loglevel::WARNING, "No weak_pages given, assuming no weak pages");
+		m_logger->log(Loglevel::WARNING, "No weak pages environment given, assuming no weak pages");
 		return;
 	}
 
@@ -241,7 +241,7 @@ void Libnorsim::initWeakPages() {
 void Libnorsim::initGravePages() {
 	char *env_grave_pages = getenv(ENV_GRAVE_PAGES);
 	if (!env_grave_pages) {
-		m_logger->log(Loglevel::WARNING, "No grave_pages given, assuming no grave pages");
+		m_logger->log(Loglevel::WARNING, "No grave pages environment given, assuming no grave pages");
 		return;
 	}
 
@@ -411,7 +411,7 @@ int Libnorsim::parsePageType(char* env, const char* const name,	e_beh_t* const b
 	}
 
 	if ((res = parsePageEnv(env, type)) < 0) {
-		m_logger->log(Loglevel::INFO, "Couldn't parse: \"%s\"", false, env);
+		m_logger->log(Loglevel::WARNING, "Couldn't parse: \"%s\"", false, env);
 		return (res);
 	}
 	m_logger->log(Loglevel::INFO, "Set \"%s pages\": %d", false, name, res);
