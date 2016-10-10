@@ -145,8 +145,18 @@ void Libnorsim::initLogger() {
 }
 
 bool Libnorsim::initSyscallsCache() {
-	m_syscallsCache.reset(new SyscallsCache(this));
-	return (m_syscallsCache->isOk()); 
+	try {
+		m_syscallsCache.reset(new SyscallsCache());
+	} catch (std::exception &e) {
+		m_logger->log(Loglevel::FATAL, "Couldn't initialize \"%s\" syscall", false, e.what());
+		return (false);
+	}
+	if (NULL == m_syscallsCache.get()) {
+		m_logger->log(Loglevel::FATAL, "SyscallsCache init failed");
+		return (false);
+	}
+	m_logger->log(Loglevel::DEBUG, "SyscallsCache init OK");
+	return (true);
 }
 
 bool Libnorsim::initCacheFile() {

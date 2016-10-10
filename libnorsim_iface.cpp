@@ -152,12 +152,14 @@ static int internal_open(Libnorsim &libnorsim, const char *path, int oflag, mode
 	if (!libnorsim.isOpened()) {
 		ret = libnorsim.getSyscallsCache().invokeOpen(path, oflag, mode);
 		if (ret < 0) {
-			libnorsim.getLogger().log(Loglevel::FATAL, "Couldn't open cache file: %s, errno=%d", false, path, libnorsim.getSyscallsCache().getLastErrno());
+			libnorsim.getLogger().log(Loglevel::FATAL, "Couldn't open cache file: %s, errno=%d",
+				false, path, libnorsim.getSyscallsCache().getSyscalls().getLastErrno());
 			goto err;
 		}
 		libnorsim.setCacheFileFd(ret);
 		if (flock(libnorsim.getCacheFileFd(), LOCK_EX) < 0) {
-			libnorsim.getLogger().log(Loglevel::FATAL, "Error while acquiring lock on cache file: %s, errno=%d", false, path, libnorsim.getSyscallsCache().getLastErrno());
+			libnorsim.getLogger().log(Loglevel::FATAL, "Error while acquiring lock on cache file: %s, errno=%d",
+				false, path, libnorsim.getSyscallsCache().getSyscalls().getLastErrno());
 			goto err;
 		}
 		libnorsim.setOpened();
@@ -179,7 +181,8 @@ static int internal_close(Libnorsim &libnorsim, int fd) {
 	if (libnorsim.isOpened()) {
 		ret = libnorsim.getSyscallsCache().invokeClose(fd);
 		if (ret < 0) {
-			libnorsim.getLogger().log(Loglevel::FATAL, "Error while closing cache file: %s, errno=%d", false, libnorsim.getCacheFile(), libnorsim.getSyscallsCache().getLastErrno());
+			libnorsim.getLogger().log(Loglevel::FATAL, "Error while closing cache file: %s, errno=%d",
+				false, libnorsim.getCacheFile(), libnorsim.getSyscallsCache().getSyscalls().getLastErrno());
 			goto err;
 		}
 		libnorsim.setClosed();
