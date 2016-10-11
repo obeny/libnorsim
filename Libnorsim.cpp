@@ -1,7 +1,7 @@
 // TODO:
+// remove hardcoded bitflip limit
 // net-socket comm
 // implement read, write (any others?)
-// real failures (masks)
 // refactoring
 
 #include <cstdio>

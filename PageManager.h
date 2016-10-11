@@ -1,6 +1,8 @@
 #ifndef __PAGEMANAGER_H__
 #define __PAGEMANAGER_H__
 
+#define PAGE_BITFLIP_LIMIT 4
+
 #include <memory>
 #include <set>
 #include <tuple>
@@ -55,6 +57,7 @@ public:
 
 private:
 	void setPageType(unsigned index, e_page_type_t type, unsigned short limit);
+	void setPageDeadBits(unsigned index);
 
 	int parsePageType(char* env, const char* const name, e_beh_t* const beh, const e_page_type_t type);
 	int parsePageEnv(const char * const str, e_page_type_t type);

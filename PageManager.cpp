@@ -7,10 +7,17 @@
 PageManager::PageManager(Libnorsim &libnorsim, unsigned pageCount)
 	: m_pageCount(pageCount), m_libnorsim(libnorsim) {
 	m_libnorsim.getLogger().log(Loglevel::INFO, "Set page count: %lu", false, m_pageCount);
-	m_pages.reset(new st_page_t[m_pageCount]());
+	m_pages.reset(new st_page_t[m_pageCount]);
 	if (!m_pages)
 		throw std::runtime_error("Couldn't allocate memory for page information structures");
-	memset(m_pages.get(), 0x00, sizeof(st_page_t) * m_pageCount);
+	for (long i = 0; i < m_pageCount; ++i) {
+		m_pages[i].reads = 0;
+		m_pages[i].writes = 0;
+		m_pages[i].erases = 0;
+		m_pages[i].limit = 0;
+		m_pages[i].type = E_PAGE_NORMAL;
+		m_pages[i].unlocked = false;
+	}
 }
 
 void PageManager::parseWeakPagesEnv(char *env) {
@@ -25,6 +32,21 @@ void PageManager::setPageType(unsigned index, e_page_type_t type, unsigned short
 	getPage(index).type = type;
 	getPage(index).limit = limit;
 }
+
+void PageManager::setPageDeadBits(unsigned index) {
+	long rnd, bit;
+	for (int i = 0; i < PAGE_BITFLIP_LIMIT; ++i) {
+		rnd = rand() % m_libnorsim.getEraseSize();
+		bit = rnd % 8;
+		m_pages[index].deadBits.insert(std::make_tuple(rnd, bit));
+	}
+	m_libnorsim.getLogger().log(Loglevel::DEBUG, "\tPage deadbits:");
+	std::set<std::tuple<unsigned, unsigned>>::iterator it;
+	for (it = m_pages[index].deadBits.begin(); it != m_pages[index].deadBits.end(); ++it) {
+		m_libnorsim.getLogger().log(Loglevel::DEBUG, "\t\tbyte=%ld, bit=%d", false, std::get<0>(*it), std::get<1>(*it));
+	}
+}
+
 int PageManager::parsePageType(char* env, const char* const name,	e_beh_t* const beh, const e_page_type_t type) {
 	int res = 0;
 
@@ -82,6 +104,7 @@ int PageManager::parsePageEnv(const char * const str, e_page_type_t type) {
 			return -1;
 		}
 		setPageType(page, type, limit);
+		setPageDeadBits(page);
 
 		if (-1 == count)
 			count = 0;
