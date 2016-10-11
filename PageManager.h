@@ -55,6 +55,8 @@ public:
 	void parseWeakPagesEnv(char *env);
 	void parseGravePagesEnv(char *env);
 
+	void setBitMask(unsigned index, char *buffer);
+
 private:
 	void setPageType(unsigned index, e_page_type_t type, unsigned short limit);
 	void setPageDeadBits(unsigned index);

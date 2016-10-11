@@ -215,7 +215,6 @@ bool Libnorsim::initEraseBuffer() {
 	m_eraseBuffer.reset(new char[m_eraseSize]);
 	if (NULL == m_eraseBuffer.get())
 		return (false);
-	memset(m_eraseBuffer.get(), 0xFF, m_eraseSize);
 	return (true);
 }
 

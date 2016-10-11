@@ -315,8 +315,8 @@ static int internal_ioctl_memerase(Libnorsim &libnorsim, va_list args) {
 	PageManager &pm = libnorsim.getPageManager();
 	if (pm.getPage(index).unlocked) {
 		pm.getPage(index).erases++;
+		pm.getPage(index).unlocked = false;
 		if (pm.getPage(index).erases <= pm.getPage(index).limit) {
-			pm.getPage(index).unlocked = false;
 			if (libnorsim.getEraseSize() ==
 				libnorsim.getSyscallsCache().invokePwrite(libnorsim.getCacheFileFd(), libnorsim.getEraseBuffer(), ei->length, ei->start))
 				ret = 0;
@@ -325,20 +325,18 @@ static int internal_ioctl_memerase(Libnorsim &libnorsim, va_list args) {
 			return (ret);
 		}
 		if (E_PAGE_WEAK == pm.getPage(index).type) {
+			memset(libnorsim.getEraseBuffer(), 0xFF, libnorsim.getEraseSize());
+			pm.setBitMask(index, libnorsim.getEraseBuffer());
+			if (libnorsim.getEraseSize() ==
+				libnorsim.getSyscallsCache().invokePwrite(libnorsim.getCacheFileFd(), libnorsim.getEraseBuffer(), ei->length, ei->start))
+				ret = 0;
+			else
+				ret = -1;
 			if (E_BEH_EIO == libnorsim.getPageManager().getWeakPageBehavior()) {
 				libnorsim.getLogger().log(Loglevel::NOTE, "EIO error at page: %lu", false, index);
-				pm.getPage(index).unlocked = false;
 				return (-1);
 			} else {
-				unsigned rnd = rand() % ei->length;
-				libnorsim.getLogger().log(Loglevel::NOTE, "RND error at page: %lu[%d] = 0x%02X", false, index, rnd, (~rnd) & 0xFF);
-				libnorsim.getEraseBuffer()[rnd] = ~rnd;
-				if (libnorsim.getEraseSize() ==\
-					libnorsim.getSyscallsCache().invokePwrite(libnorsim.getCacheFileFd(), libnorsim.getEraseBuffer(), ei->length, ei->start))
-					ret = 0;
-				else
-					ret = -1;
-				libnorsim.getEraseBuffer()[rnd] = 0xFF;
+				libnorsim.getLogger().log(Loglevel::NOTE, "RND error at page: %lu", false, index);
 			}
 		} else {
 			if (libnorsim.getEraseSize() ==
@@ -347,7 +345,6 @@ static int internal_ioctl_memerase(Libnorsim &libnorsim, va_list args) {
 			else
 				return (-1);
 		}
-		pm.getPage(index).unlocked = false;
 	} else {
 		libnorsim.getLogger().log(Loglevel::WARNING, "Page %ld locked, rejecting erase request", false, index);
 		return (-1);

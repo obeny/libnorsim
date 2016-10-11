@@ -114,3 +114,10 @@ int PageManager::parsePageEnv(const char * const str, e_page_type_t type) {
 
 	return (count);
 }
+
+void PageManager::setBitMask(unsigned index, char *buffer) {
+	std::set<std::tuple<unsigned, unsigned>>::iterator it;
+	for (it = m_pages[index].deadBits.begin(); it != m_pages[index].deadBits.end(); ++it) {
+		buffer[std::get<0>(*it)] = ~(1 << std::get<1>(*it));
+	}
+}

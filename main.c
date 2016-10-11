@@ -121,7 +121,7 @@ int main(int argc, char* argv[])
 	printf("read ret=%d bytes\n", read_bytes);
 	for (long i = 0; i < (256 * 1024); ++i){
 		if ((char)0xFF != buf[i])
-			printf("unexpected value found: 0x%X, should be: 0xFF\n", (char)buf[i]);
+			printf("unexpected value found at offset=%ld: 0x%02X, should be: 0xFF\n", i, buf[i] & 0xFF);
 	}
 
 	// write block exceeding erasepage boundary
