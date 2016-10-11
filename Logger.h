@@ -24,7 +24,7 @@ public:
 	LogFormatter() {}
 	virtual ~LogFormatter() {}
 
-	virtual const char* format(const Loglevel loglevel, const char* msg, const bool raw) = 0;
+	virtual const char* format(const Loglevel loglevel, const char *msg, const bool raw) = 0;
 };
 
 class Logger {
@@ -59,7 +59,7 @@ protected:
 	virtual void write(const char *msg) = 0;
 
 	char m_printBuffer[LOGGER_PRINTBUFFER_SIZE];
-	LogFormatter* m_logFormatter;
+	LogFormatter *m_logFormatter;
 
 private:
 	Loglevel m_verbosity = Loglevel::DEBUG;
@@ -93,14 +93,14 @@ public:
 
 	bool isOk() { return (m_ok); }
 private:
-	LoggerFile(LogFormatter *formatter, const char* path)
+	LoggerFile(LogFormatter *formatter, const char *path)
 	 : Logger(formatter) {
 		m_outFile = fopen(path, "a");
 		if (m_outFile)
 			m_ok = true;
 	}
 
-	void write(const char* msg) { fprintf(m_outFile, "%s", msg); fflush(m_outFile); }
+	void write(const char *msg) { fprintf(m_outFile, "%s", msg); fflush(m_outFile); }
 
 	bool m_ok = false;
 	FILE *m_outFile;
@@ -113,7 +113,7 @@ public:
 		return (new LoggerStdio(formatter));
 	}
 #ifdef LOGGERFILE_ENABLE
-	static Logger* createLoggerFile(LogFormatter *formatter, const char* file) {
+	static Logger* createLoggerFile(LogFormatter *formatter, const char *file) {
 		return (new LoggerFile(formatter, file));
 	}
 #endif // LOGGERFILE_ENABLE

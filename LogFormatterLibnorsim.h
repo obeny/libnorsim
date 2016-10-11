@@ -22,7 +22,7 @@ public:
 	 : m_console(console) {}
 	~LogFormatterLibnorsim() {}
 
-	const char* format(const Loglevel loglevel, const char* msg, const bool raw) {
+	const char* format(const Loglevel loglevel, const char *msg, const bool raw) {
 		if (raw)
 			return (msg);
 		if (m_console) {

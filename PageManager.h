@@ -41,7 +41,7 @@ class Libnorsim;
 
 class PageManager {
 public:
-	PageManager(Libnorsim &libnorsim, unsigned pageCount);
+	PageManager(Libnorsim &libnorsim, const unsigned pageCount);
 
 	unsigned getPageCount() { return (m_pageCount); }
 	int getWeakPageCount() { return (m_weakPages); }
@@ -50,20 +50,20 @@ public:
 	e_beh_t getWeakPageBehavior() { return (m_behaviorWeak); }
 	e_beh_t getGravePageBehavior() { return (m_behaviorGrave); }
 
-	st_page_t & getPage(unsigned index) { return (m_pages.get()[index]); }
+	st_page_t& getPage(const unsigned index) { return (m_pages.get()[index]); }
 
-	void parseWeakPagesEnv(char *env);
-	void parseGravePagesEnv(char *env);
+	void parseWeakPagesEnv(const char *env);
+	void parseGravePagesEnv(const char *env);
 
-	void setBitMask(unsigned index, char *buffer);
-	void mergeBitMasks(unsigned long offset, unsigned long count, char *dst, const char *src);
+	void setBitMask(const unsigned index, char *buffer);
+	void mergeBitMasks(const unsigned long offset, const unsigned long count, char *dst, const char *src);
 
 private:
-	void setPageType(unsigned index, e_page_type_t type, unsigned short limit);
-	void setPageDeadBits(unsigned index);
+	void setPageType(const unsigned index, const e_page_type_t type, const unsigned short limit);
+	void setPageDeadBits(const unsigned index);
 
-	int parsePageType(char* env, const char* const name, e_beh_t* const beh, const e_page_type_t type);
-	int parsePageEnv(const char * const str, e_page_type_t type);
+	int parsePageType(const char *env, const char * const name, e_beh_t * const beh, const e_page_type_t type);
+	int parsePageEnv(const char * const str, const e_page_type_t type);
 	
 	int m_weakPages;
 	int m_gravePages;

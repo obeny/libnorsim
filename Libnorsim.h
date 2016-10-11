@@ -34,7 +34,7 @@ class LogFormatter;
 class Libnorsim
 {
 public:
-	static Libnorsim & getInstance() {
+	static Libnorsim& getInstance() {
 		static Libnorsim instance;
 		return instance;
 	}
@@ -99,7 +99,6 @@ private:
 	int m_cacheFileFd;
 
 	mtd_info_t m_mtdInfo;
-
 };
 
 #endif // __LIBNORSIM_H__

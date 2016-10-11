@@ -38,7 +38,7 @@ __attribute__((destructor)) void libnorsim_destructor()
 }
 
 Libnorsim::Libnorsim() 
-	: m_initialized(false), m_opened(false), m_cacheFileFd(-1) {
+ : m_initialized(false), m_opened(false), m_cacheFileFd(-1) {
 	report_requested = 0;
 
 	initLogger();

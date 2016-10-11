@@ -4,8 +4,8 @@
 #include "Libnorsim.h"
 #include "Logger.h"
 
-PageManager::PageManager(Libnorsim &libnorsim, unsigned pageCount)
-	: m_pageCount(pageCount), m_libnorsim(libnorsim) {
+PageManager::PageManager(Libnorsim &libnorsim, const unsigned pageCount)
+ : m_pageCount(pageCount), m_libnorsim(libnorsim) {
 	m_libnorsim.getLogger().log(Loglevel::INFO, "Set page count: %lu", false, m_pageCount);
 	m_pages.reset(new st_page_t[m_pageCount]);
 	if (!m_pages)
@@ -20,20 +20,37 @@ PageManager::PageManager(Libnorsim &libnorsim, unsigned pageCount)
 	}
 }
 
-void PageManager::parseWeakPagesEnv(char *env) {
+void PageManager::parseWeakPagesEnv(const char *env) {
 	m_weakPages = parsePageType(env, "weak", &m_behaviorWeak, E_PAGE_WEAK);
 }
 
-void PageManager::parseGravePagesEnv(char *env) {
+void PageManager::parseGravePagesEnv(const char *env) {
 	m_gravePages = parsePageType(env, "grave", &m_behaviorGrave, E_PAGE_GRAVE);
 }
 
-void PageManager::setPageType(unsigned index, e_page_type_t type, unsigned short limit) {
+void PageManager::setBitMask(const unsigned index, char *buffer) {
+	std::set<std::tuple<unsigned, unsigned>>::iterator it;
+	for (it = m_pages[index].deadBits.begin(); it != m_pages[index].deadBits.end(); ++it) {
+		buffer[std::get<0>(*it)] = ~(1 << std::get<1>(*it));
+	}
+}
+
+void PageManager::mergeBitMasks(const unsigned long offset, const unsigned long count, char *dst, const char *src) {
+	char *head = &dst[offset];
+	char *end = &head[count];
+	char tmp;
+	for (; head < end; ++head) {
+		tmp = *head & *src;
+		*head = tmp;
+	}
+}
+
+void PageManager::setPageType(const unsigned index, const e_page_type_t type, const unsigned short limit) {
 	getPage(index).type = type;
 	getPage(index).limit = limit;
 }
 
-void PageManager::setPageDeadBits(unsigned index) {
+void PageManager::setPageDeadBits(const unsigned index) {
 	long rnd, bit;
 	for (int i = 0; i < PAGE_BITFLIP_LIMIT; ++i) {
 		rnd = rand() % m_libnorsim.getEraseSize();
@@ -47,7 +64,7 @@ void PageManager::setPageDeadBits(unsigned index) {
 	}
 }
 
-int PageManager::parsePageType(char* env, const char* const name,	e_beh_t* const beh, const e_page_type_t type) {
+int PageManager::parsePageType(const char *env, const char * const name, e_beh_t * const beh, const e_page_type_t type) {
 	int res = 0;
 
 	if (0 == strncmp(env, PARSE_BEH_EIO, PARSE_BEH_LEN)) {
@@ -72,7 +89,7 @@ int PageManager::parsePageType(char* env, const char* const name,	e_beh_t* const
 	return (res);
 }
 
-int PageManager::parsePageEnv(const char * const str, e_page_type_t type) {
+int PageManager::parsePageEnv(const char * const str, const e_page_type_t type) {
 	const char *cur_node = str;
 	char *cur_prop;
 	char *end_node;
@@ -115,19 +132,3 @@ int PageManager::parsePageEnv(const char * const str, e_page_type_t type) {
 	return (count);
 }
 
-void PageManager::setBitMask(unsigned index, char *buffer) {
-	std::set<std::tuple<unsigned, unsigned>>::iterator it;
-	for (it = m_pages[index].deadBits.begin(); it != m_pages[index].deadBits.end(); ++it) {
-		buffer[std::get<0>(*it)] = ~(1 << std::get<1>(*it));
-	}
-}
-
-void PageManager::mergeBitMasks(unsigned long offset, unsigned long count, char *dst, const char *src) {
-	char *head = &dst[offset];
-	char *end = &head[count];
-	char tmp;
-	for (; head < end; ++head) {
-		tmp = *head & *src;
-		*head = tmp;
-	}
-}
