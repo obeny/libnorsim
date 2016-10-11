@@ -16,7 +16,7 @@
 #include "Libnorsim.h"
 #include "LogFormatterLibnorsim.h"
 
-#define STATS_FILL(t,a,op) t.a##_##op = get_##a(t.a##_##op,m_pageInfo.get()[i].op)
+#define STATS_FILL(t,a,op) t.a##_##op = get_##a(t.a##_##op,m_pageManager->getPage(i).op)
 
 extern "C" void sig_handler(int signum);
 extern "C" volatile sig_atomic_t report_requested;
@@ -48,15 +48,18 @@ Libnorsim::Libnorsim()
 		goto err;
 	if (!initSizes())
 		goto err;
-	if (!initPages())
-		goto err;
 	if (!initEraseBuffer())
 		goto err;
 
-	initWeakPages();
-	initGravePages();
+	try {
+		m_pageManager.reset(new PageManager(*this, m_size / m_eraseSize));
+	} catch (std::exception &e) {
+		m_logger->log(Loglevel::FATAL, "%s", false, e.what());
+		goto err;
+	}
+	initPageFailures();
 
-	if ((!m_weakPages) && (!m_gravePages))
+	if ((!m_pageManager->getWeakPageCount()) && (!m_pageManager->getGravePageCount()))
 		m_logger->log(Loglevel::WARNING, "No failures defined, faults won't be forwarded to user program");
 
 	m_logger->log(Loglevel::ALWAYS, "SUMMARY:");
@@ -208,18 +211,6 @@ bool Libnorsim::initSizes() {
 	return (true);
 }
 
-bool Libnorsim::initPages() {
-	m_pages = m_size / m_eraseSize;
-	m_logger->log(Loglevel::INFO, "Set page count: %lu", false, m_pages);
-	m_pageInfo.reset(new st_page_t[m_pages]);
-	if (!m_pageInfo) {
-		m_logger->log(Loglevel::FATAL, "Couldn't allocate memory for page information");
-		return (false);
-	}
-	memset(m_pageInfo.get(), 0x00, sizeof(st_page_t) * m_pages);
-	return (true);
-}
-
 bool Libnorsim::initEraseBuffer() {
 	m_eraseBuffer.reset(new char[m_eraseSize]);
 	if (NULL == m_eraseBuffer.get())
@@ -228,24 +219,18 @@ bool Libnorsim::initEraseBuffer() {
 	return (true);
 }
 
-void Libnorsim::initWeakPages() {
+void Libnorsim::initPageFailures() {
 	char *env_weak_pages = getenv(ENV_WEAK_PAGES);
-	if (!env_weak_pages) {
+	if (env_weak_pages)
+		m_pageManager->parseWeakPagesEnv(env_weak_pages);
+	else
 		m_logger->log(Loglevel::WARNING, "No weak pages environment given, assuming no weak pages");
-		return;
-	}
 
-	m_weakPages = parsePageType(env_weak_pages, "weak", &m_behaviorWeak, E_PAGE_WEAK);
-}
-
-void Libnorsim::initGravePages() {
 	char *env_grave_pages = getenv(ENV_GRAVE_PAGES);
-	if (!env_grave_pages) {
+	if (env_grave_pages)
+		m_pageManager->parseGravePagesEnv(env_grave_pages);
+	else
 		m_logger->log(Loglevel::WARNING, "No grave pages environment given, assuming no grave pages");
-		return;
-	}
-
-	m_gravePages = parsePageType(env_grave_pages, "grave", &m_behaviorGrave, E_PAGE_GRAVE);
 }
 
 void Libnorsim::initMtdInfo() {
@@ -288,36 +273,31 @@ void Libnorsim::printPageReport(bool detailed)
 {
 	std::lock_guard<std::mutex> lg(m_mutex);
 
-	for (unsigned i = 0; i < m_pages; ++i) {
-		switch (m_pageInfo.get()[i].type) {
+	long remaining;
+	for (unsigned i = 0; i < m_pageManager->getPageCount(); ++i) {
+		st_page_t page = m_pageManager->getPage(i);
+		switch (m_pageManager->getPage(i).type) {
 			case E_PAGE_NORMAL:
-				if (detailed && (m_pageInfo.get()[i].reads || m_pageInfo.get()[i].writes || m_pageInfo.get()[i].erases)) {
+				if (detailed && (page.reads || page.writes || page.erases)) {
 					m_logger->log(Loglevel::ALWAYS, "\tPage %5u: N(reads=%lu, writes=%lu, erases=%lu)", false,
-						i,
-						m_pageInfo.get()[i].reads,
-						m_pageInfo.get()[i].writes,
-						m_pageInfo.get()[i].erases
+						i, page.reads, page.writes, page.erases
 					);
 				}
 				break;
 			case E_PAGE_WEAK:
+				remaining = page.limit - page.erases;
 				m_logger->log(Loglevel::ALWAYS, "\tPage %5u: W(limit=%u, remaining=%u, reads=%lu, writes=%lu, erases=%lu)", false,
 					i,
-					m_pageInfo.get()[i].limit,
-					m_pageInfo.get()[i].limit - m_pageInfo.get()[i].erases,
-					m_pageInfo.get()[i].reads,
-					m_pageInfo.get()[i].writes,
-					m_pageInfo.get()[i].erases
+					page.limit, (remaining > 0)?(remaining):(0),
+					page.reads, page.writes, page.erases
 				);
 				break;
 			case E_PAGE_GRAVE:
+				remaining = page.limit - page.erases;
 				m_logger->log(Loglevel::ALWAYS, "\tPage %5u: G(limit=%u, remaining=%u, reads=%lu, writes=%lu, erases=%lu)", false,
 					i,
-					m_pageInfo.get()[i].limit,
-					m_pageInfo.get()[i].limit - m_pageInfo.get()[i].reads,
-					m_pageInfo.get()[i].reads,
-					m_pageInfo.get()[i].writes,
-					m_pageInfo.get()[i].erases
+					page.limit, (remaining > 0)?(remaining):(0),
+					page.reads, page.writes, page.erases
 				);
 				break;
 			default:
@@ -333,8 +313,8 @@ void Libnorsim::printPageStatistics() {
 	memset (&grave, 0x00, sizeof(grave));
 
 	m_mutex.lock();
-	for (unsigned i = 0; i < m_pages; ++i) {
-		switch (m_pageInfo.get()[i].type) {
+	for (unsigned i = 0; i < m_pageManager->getPageCount(); ++i) {
+		switch (m_pageManager->getPage(i).type) {
 			case E_PAGE_NORMAL:
 				STATS_FILL(normal,max,reads); STATS_FILL(normal,max,writes); STATS_FILL(normal,max,erases);
 				break;
@@ -351,8 +331,8 @@ void Libnorsim::printPageStatistics() {
 	normal.min_reads = normal.max_reads; normal.min_writes = normal.max_writes; normal.min_erases = normal.max_erases;
 	weak.min_reads = weak.max_reads; weak.min_writes = weak.max_writes; weak.min_erases = weak.max_erases;
 	grave.min_reads = grave.max_reads; grave.min_writes = grave.max_writes; grave.min_erases = grave.max_erases;
-	for (unsigned i = 0; i < m_pages; ++i) {
-		switch (m_pageInfo.get()[i].type) {
+	for (unsigned i = 0; i < m_pageManager->getPageCount(); ++i) {
+		switch (m_pageManager->getPage(i).type) {
 			case E_PAGE_NORMAL:
 				STATS_FILL(normal,min,reads); STATS_FILL(normal,min,writes); STATS_FILL(normal,min,erases);
 				break;
@@ -391,72 +371,4 @@ void Libnorsim::printPageStatistics() {
 	m_logger->log(Loglevel::ALWAYS, "\t\tmax writes: %lu", false, grave.max_writes);
 	m_logger->log(Loglevel::ALWAYS, "\t\tmin erases: %lu", false, grave.min_erases);
 	m_logger->log(Loglevel::ALWAYS, "\t\tmax erases: %lu", false, grave.max_erases);
-}
-
-int Libnorsim::parsePageType(char* env, const char* const name,	e_beh_t* const beh, const e_page_type_t type) {
-	int res = 0;
-
-	if (0 == strncmp(env, PARSE_BEH_EIO, PARSE_BEH_LEN)) {
-		*beh = E_BEH_EIO;
-		m_logger->log(Loglevel::INFO, "Set \"%s pages\" behavior: %s", false, name, PARSE_BEH_EIO);
-		env = strchr(env, PARSE_PREFIX_DELIM) + 1;
-	}
-	else if (0 == strncmp(env, PARSE_BEH_RND, PARSE_BEH_LEN)) {
-		*beh = E_BEH_RND;
-		m_logger->log(Loglevel::INFO, "Set \"%s pages\" behavior: %s", false, name, PARSE_BEH_RND);
-		env = strchr(env, PARSE_PREFIX_DELIM) + 1;
-	} else {
-		*beh = E_BEH_EIO;
-		m_logger->log(Loglevel::INFO, "No \"%s pages\" behavior defined, assuming \"eio\"", false, name);
-	}
-
-	if ((res = parsePageEnv(env, type)) < 0) {
-		m_logger->log(Loglevel::WARNING, "Couldn't parse: \"%s\"", false, env);
-		return (res);
-	}
-	m_logger->log(Loglevel::INFO, "Set \"%s pages\": %d", false, name, res);
-	return (res);
-}
-
-int Libnorsim::parsePageEnv(const char * const str, e_page_type_t type) {
-	const char *cur_node = str;
-	char *cur_prop;
-	char *end_node;
-	char *end_prop;
-	int count = -1;
-	unsigned limit;
-	unsigned long page;
-
-	if (0 == str[0])
-		return (0);
-
-	char type_sign = (type == E_PAGE_WEAK)?('W'):('G');
-	do {
-		end_node = (char*)(strchr(cur_node, PARSE_NODE_DELIM));
-		if (NULL == end_node) break;
-		end_prop = (char*)strchr(cur_node, PARSE_PROP_DELIM);
-		if (NULL == end_prop) break;
-
-		page = strtoul(cur_node, &end_prop, 10);
-		cur_prop = ++end_prop;
-		limit = strtoul(cur_prop, NULL, 10);
-		m_logger->log(Loglevel::DEBUG, "\t(%c)\tpage=%lu\tlimit=%u", false,
-			type_sign, page, limit
-		);
-		if (page > m_pages) {
-			m_logger->log(Loglevel::ERROR, "\t(%c)\ttrying to set non existing page (page=%lu > pages=%lu)", false,
-				type_sign, page, m_pages
-			);
-			return -1;
-		}
-		m_pageInfo.get()[page].type = type;
-		m_pageInfo.get()[page].limit = limit;
-
-		if (-1 == count)
-			count = 0;
-		++count;
-		cur_node = ++end_node;
-	} while (NULL != cur_node);
-
-	return (count);
 }

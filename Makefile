@@ -3,7 +3,7 @@ VERSION = 1.0
 CC ?= gcc
 CXX ?= g++
 
-LIB_OBJS := Libnorsim.o Libnorsim_helpers.o libnorsim_iface.o SyscallsCache.o
+LIB_OBJS := Libnorsim.o Libnorsim_helpers.o libnorsim_iface.o PageManager.o SyscallsCache.o
 PRG_OBJS := main.o
 
 CFLAGS := -pipe -D_GNU_SOURCE=1 -fstack-protector-all
