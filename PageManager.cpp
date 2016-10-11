@@ -121,3 +121,13 @@ void PageManager::setBitMask(unsigned index, char *buffer) {
 		buffer[std::get<0>(*it)] = ~(1 << std::get<1>(*it));
 	}
 }
+
+void PageManager::mergeBitMasks(unsigned long offset, unsigned long count, char *dst, const char *src) {
+	char *head = &dst[offset];
+	char *end = &head[count];
+	char tmp;
+	for (; head < end; ++head) {
+		tmp = *head & *src;
+		*head = tmp;
+	}
+}

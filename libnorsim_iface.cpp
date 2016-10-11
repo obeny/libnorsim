@@ -253,28 +253,34 @@ static int internal_pwrite(Libnorsim &libnorsim, int fd, const void *buf, size_t
 		libnorsim.getLogger().log(Loglevel::WARNING, "Write block exceeds eraseblock boundary");
 		return (-1);
 	}
+	if (count != libnorsim.getSyscallsCache().invokePread(fd, &libnorsim.getPageBuffer()[index_in], count, offset)) {
+		libnorsim.getLogger().log(Loglevel::WARNING, "Pre-read failed");
+		return (-1);
+	}
 
 	PageManager &pm = libnorsim.getPageManager();
+	pm.mergeBitMasks(index_in, count, libnorsim.getPageBuffer(), static_cast<const char*>(buf));
 	pm.getPage(index).writes++;
+	if (pm.getPage(index).erases <= pm.getPage(index).limit) {
+		if (count ==
+			libnorsim.getSyscallsCache().invokePwrite(fd, &libnorsim.getPageBuffer()[index_in], count, offset))
+			ret = 0;
+		else
+			ret = -1;
+		return (ret);
+	}
 	if (E_PAGE_WEAK == pm.getPage(index).type) {
 		if (pm.getPage(index).erases <= pm.getPage(index).limit) {
-			return (libnorsim.getSyscallsCache().invokePwrite(fd, buf, count, offset));
+			return (ret);
 		} else {
 			if (E_BEH_EIO == libnorsim.getPageManager().getWeakPageBehavior()) {
 				libnorsim.getLogger().log(Loglevel::NOTE, "EIO error at page: %lu", false, index);
 				return (-1);
 			} else {
-				unsigned long rnd = rand() % count;
-				char rnd_byte = ((const char*)buf)[rnd] ^ rnd;
-				libnorsim.getLogger().log(Loglevel::NOTE, "RND error at page: %lu[%lu], expected: 0x%02X, is 0x%02X", false, index, index_in + rnd, ((const char*)buf)[rnd], rnd_byte);
-				((char*)buf)[rnd] = rnd_byte;
-				ret = libnorsim.getSyscallsCache().invokePwrite(fd, buf, count, offset);
+				libnorsim.getLogger().log(Loglevel::NOTE, "RND error at page: %lu", false, index);
 			}
 		}
-	} else {
-		return (libnorsim.getSyscallsCache().invokePwrite(fd, buf, count, offset));
 	}
-
 	return (ret);
 }
 
@@ -288,10 +294,12 @@ static int internal_ioctl_memgetinfo(Libnorsim &libnorsim, va_list args) {
 static int internal_ioctl_memunlock(Libnorsim &libnorsim, va_list args) {
 	erase_info_t *ei = va_arg(args, erase_info_t*);
 	unsigned index = (ei->start) / libnorsim.getEraseSize();
-	libnorsim.getLogger().log(Loglevel::NOTE, "Got MEMUNLOCK request at page: %d", false, index);
+	libnorsim.getLogger().log(Loglevel::NOTE, "Got MEMUNLOCK request at page: %d, start=0x%lX, length=0x%lX", false, index, ei->start, ei->length);
 
-	if ((0 != (ei->start % libnorsim.getEraseSize()) || 0 != (ei->length % libnorsim.getEraseSize()))) {
-		libnorsim.getLogger().log(Loglevel::WARNING, "Invalid erase_info_t, start=0x%04lX, length=0x%04lX",
+	if ((0 != (ei->start % libnorsim.getEraseSize())) ||
+		(0 != (ei->length % libnorsim.getEraseSize())) ||
+		((ei->length / libnorsim.getEraseSize()) > 1)) {
+		libnorsim.getLogger().log(Loglevel::WARNING, "Invalid erase_info_t, start=0x%lX, length=0x%lX",
 			false, (unsigned long)ei->start, (unsigned long)ei->length);
 		return (-1);
 	}
@@ -304,31 +312,33 @@ static int internal_ioctl_memerase(Libnorsim &libnorsim, va_list args) {
 	int ret = 0;
 	erase_info_t *ei = va_arg(args, erase_info_t*);
 	unsigned index = (ei->start) / libnorsim.getEraseSize();
-	libnorsim.getLogger().log(Loglevel::NOTE, "Got MEMERASE request at page: %d", false, index);
+	libnorsim.getLogger().log(Loglevel::NOTE, "Got MEMERASE request at page: %d, start=0x%lX, length=0x%lX", false, index, ei->start, ei->length);
 
-	if ((0 != (ei->start % libnorsim.getEraseSize()) || 0 != (ei->length % libnorsim.getEraseSize()))) {
-		libnorsim.getLogger().log(Loglevel::WARNING, "Invalid erase_info_t, start=0x%04lX, length=0x%04lX",
+	if ((0 != (ei->start % libnorsim.getEraseSize())) ||
+		(0 != (ei->length % libnorsim.getEraseSize())) ||
+		((ei->length / libnorsim.getEraseSize()) > 1)) {
+		libnorsim.getLogger().log(Loglevel::WARNING, "Invalid erase_info_t, start=0x%lX, length=0x%lX",
 			false, (unsigned long)ei->start, (unsigned long)ei->length);
 		return (-1);
 	}
 
+	memset(libnorsim.getPageBuffer(), 0xFF, libnorsim.getEraseSize());
 	PageManager &pm = libnorsim.getPageManager();
 	if (pm.getPage(index).unlocked) {
 		pm.getPage(index).erases++;
 		pm.getPage(index).unlocked = false;
 		if (pm.getPage(index).erases <= pm.getPage(index).limit) {
 			if (libnorsim.getEraseSize() ==
-				libnorsim.getSyscallsCache().invokePwrite(libnorsim.getCacheFileFd(), libnorsim.getEraseBuffer(), ei->length, ei->start))
+				libnorsim.getSyscallsCache().invokePwrite(libnorsim.getCacheFileFd(), libnorsim.getPageBuffer(), ei->length, ei->start))
 				ret = 0;
 			else
 				ret = -1;
 			return (ret);
 		}
 		if (E_PAGE_WEAK == pm.getPage(index).type) {
-			memset(libnorsim.getEraseBuffer(), 0xFF, libnorsim.getEraseSize());
-			pm.setBitMask(index, libnorsim.getEraseBuffer());
+			pm.setBitMask(index, libnorsim.getPageBuffer());
 			if (libnorsim.getEraseSize() ==
-				libnorsim.getSyscallsCache().invokePwrite(libnorsim.getCacheFileFd(), libnorsim.getEraseBuffer(), ei->length, ei->start))
+				libnorsim.getSyscallsCache().invokePwrite(libnorsim.getCacheFileFd(), libnorsim.getPageBuffer(), ei->length, ei->start))
 				ret = 0;
 			else
 				ret = -1;
@@ -340,7 +350,7 @@ static int internal_ioctl_memerase(Libnorsim &libnorsim, va_list args) {
 			}
 		} else {
 			if (libnorsim.getEraseSize() ==
-				libnorsim.getSyscallsCache().invokePwrite(libnorsim.getCacheFileFd(), libnorsim.getEraseBuffer(), ei->length, ei->start))
+				libnorsim.getSyscallsCache().invokePwrite(libnorsim.getCacheFileFd(), libnorsim.getPageBuffer(), ei->length, ei->start))
 				return (0);
 			else
 				return (-1);

@@ -87,16 +87,34 @@ int main(int argc, char* argv[])
 	ret = ioctl(fd, MEMERASE, &ei);
 	printf("ioctl MEMERASE ret=%d\n", ret);
 
+	read_bytes = pread(fd, buf, 256*1024, ei.start);
+	printf("read ret=%d 0xFF\n", read_bytes);
+	for (long i = 0; i < (256 * 1024); ++i){
+		if ((char)0xFF != buf[i]) {
+			printf("unexpected value found at offset=%ld: 0x%02X, should be: 0xFF\n", i, buf[i] & 0xFF);
+		}
+	}
 	// writing to weak page
 	printf("writing to weak page (cycles=1/2)\n");
 	memset(buf, 0xA5, 256 * 1024);
 	written_bytes = pwrite(fd, buf, ei.length, ei.start);
-	printf("written ret=%d zeros\n", written_bytes);
+	printf("written ret=%d 0xA5\n", written_bytes);
 	read_bytes = pread(fd, buf, 256*1024, ei.start);
-	printf("read ret=%d zeros\n", read_bytes);
+	printf("read ret=%d 0xA5\n", read_bytes);
 	for (long i = 0; i < (256 * 1024); ++i){
-		if ((char)0xA5!= buf[i])
-			printf("unexpected value found, should be 0xA5\n");
+		if ((char)0xA5 != buf[i])
+			printf("unexpected value found at offset=%ld: 0x%02X, should be: 0xA5\n", i, buf[i] & 0xFF);
+	}
+	// writing again to weak page
+	printf("writing again to weak page (cycles=1/2)\n");
+	memset(buf, 0xFF, 256 * 1024);
+	written_bytes = pwrite(fd, buf, ei.length, ei.start);
+	printf("written ret=%d 0xA5\n", written_bytes);
+	read_bytes = pread(fd, buf, 256*1024, ei.start);
+	printf("read ret=%d 0xA5\n", read_bytes);
+	for (long i = 0; i < (256 * 1024); ++i){
+		if ((char)0xA5 != buf[i])
+			printf("unexpected value found at offset=%ld: 0x%02X, should be: 0xA5\n", i, buf[i] & 0xFF);
 	}
 
 	// erasing weak page

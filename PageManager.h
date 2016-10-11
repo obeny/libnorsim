@@ -56,6 +56,7 @@ public:
 	void parseGravePagesEnv(char *env);
 
 	void setBitMask(unsigned index, char *buffer);
+	void mergeBitMasks(unsigned long offset, unsigned long count, char *dst, const char *src);
 
 private:
 	void setPageType(unsigned index, e_page_type_t type, unsigned short limit);

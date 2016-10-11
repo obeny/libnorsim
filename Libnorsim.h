@@ -54,7 +54,7 @@ public:
 	int getCacheFileFd() { return (m_cacheFileFd); }
 	void setCacheFileFd(int fd) { m_cacheFileFd = fd; }
 
-	char* getEraseBuffer() { return (m_eraseBuffer.get()); }
+	char* getPageBuffer() { return (m_pageBuffer.get()); }
 
 	bool isOpened() { return (m_opened); }
 	void setOpened() { m_opened = true; }
@@ -72,7 +72,7 @@ private:
 	bool initSyscallsCache();
 	bool initCacheFile();
 	bool initSizes();
-	bool initEraseBuffer();
+	bool initPageBuffer();
 	void initPageFailures();
 	
 	void initMtdInfo();
@@ -91,7 +91,7 @@ private:
 	std::mutex m_mutex;
 
 	std::unique_ptr<char> m_cacheFile;
-	std::unique_ptr<char> m_eraseBuffer;
+	std::unique_ptr<char> m_pageBuffer;
 
 	unsigned long m_size;
 	unsigned long m_eraseSize;

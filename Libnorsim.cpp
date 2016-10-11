@@ -48,7 +48,7 @@ Libnorsim::Libnorsim()
 		goto err;
 	if (!initSizes())
 		goto err;
-	if (!initEraseBuffer())
+	if (!initPageBuffer())
 		goto err;
 
 	try {
@@ -211,9 +211,9 @@ bool Libnorsim::initSizes() {
 	return (true);
 }
 
-bool Libnorsim::initEraseBuffer() {
-	m_eraseBuffer.reset(new char[m_eraseSize]);
-	if (NULL == m_eraseBuffer.get())
+bool Libnorsim::initPageBuffer() {
+	m_pageBuffer.reset(new char[m_eraseSize]);
+	if (NULL == m_pageBuffer.get())
 		return (false);
 	return (true);
 }
