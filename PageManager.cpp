@@ -36,12 +36,14 @@ void PageManager::setBitMask(const unsigned index, char *buffer) {
 }
 
 void PageManager::mergeBitMasks(const unsigned long offset, const unsigned long count, char *dst, const char *src) {
-	char *head = &dst[offset];
-	char *end = &head[count];
+	char *dst_head = &dst[offset];
+	char *dst_end = &dst_head[count];
+	char *src_head = (char*)src;
 	char tmp;
-	for (; head < end; ++head) {
-		tmp = *head & *src;
-		*head = tmp;
+	for (; dst_head < dst_end; ++dst_head) {
+		tmp = *dst_head & *src_head;
+		*dst_head = tmp;
+		src_head++;
 	}
 }
 

@@ -14,7 +14,7 @@
 #define SYSCALL_PROLOGUE(syscall) \
 	do { \
 		instance.handleReportRequest(); \
-		instance.getLogger().log(Loglevel::NOTE, "handling syscall: %s", false, syscall); \
+		instance.getLogger().log(Loglevel::DEBUG, "handling syscall: %s", false, syscall); \
 	} while (0)
 
 extern "C" {
@@ -261,14 +261,10 @@ static int internal_pwrite(Libnorsim &libnorsim, int fd, const void *buf, size_t
 	PageManager &pm = libnorsim.getPageManager();
 	pm.mergeBitMasks(index_in, count, libnorsim.getPageBuffer(), static_cast<const char*>(buf));
 	pm.getPage(index).writes++;
-	if (pm.getPage(index).erases <= pm.getPage(index).limit) {
-		if (count ==
-			libnorsim.getSyscallsCache().invokePwrite(fd, &libnorsim.getPageBuffer()[index_in], count, offset))
-			ret = 0;
-		else
-			ret = -1;
-		return (ret);
-	}
+	if (count == libnorsim.getSyscallsCache().invokePwrite(fd, &libnorsim.getPageBuffer()[index_in], count, offset))
+		ret = count;
+	else
+		ret = -1;
 	if (E_PAGE_WEAK == pm.getPage(index).type) {
 		if (pm.getPage(index).erases <= pm.getPage(index).limit) {
 			return (ret);
@@ -329,7 +325,8 @@ static int internal_ioctl_memerase(Libnorsim &libnorsim, va_list args) {
 		pm.getPage(index).unlocked = false;
 		if (pm.getPage(index).erases <= pm.getPage(index).limit) {
 			if (libnorsim.getEraseSize() ==
-				libnorsim.getSyscallsCache().invokePwrite(libnorsim.getCacheFileFd(), libnorsim.getPageBuffer(), ei->length, ei->start))
+				libnorsim.getSyscallsCache().invokePwrite(libnorsim.getCacheFileFd(), libnorsim.getPageBuffer(), ei->length, ei->start)
+			)
 				ret = 0;
 			else
 				ret = -1;
@@ -338,7 +335,8 @@ static int internal_ioctl_memerase(Libnorsim &libnorsim, va_list args) {
 		if (E_PAGE_WEAK == pm.getPage(index).type) {
 			pm.setBitMask(index, libnorsim.getPageBuffer());
 			if (libnorsim.getEraseSize() ==
-				libnorsim.getSyscallsCache().invokePwrite(libnorsim.getCacheFileFd(), libnorsim.getPageBuffer(), ei->length, ei->start))
+				libnorsim.getSyscallsCache().invokePwrite(libnorsim.getCacheFileFd(), libnorsim.getPageBuffer(), ei->length, ei->start)
+			)
 				ret = 0;
 			else
 				ret = -1;
@@ -350,7 +348,8 @@ static int internal_ioctl_memerase(Libnorsim &libnorsim, va_list args) {
 			}
 		} else {
 			if (libnorsim.getEraseSize() ==
-				libnorsim.getSyscallsCache().invokePwrite(libnorsim.getCacheFileFd(), libnorsim.getPageBuffer(), ei->length, ei->start))
+				libnorsim.getSyscallsCache().invokePwrite(libnorsim.getCacheFileFd(), libnorsim.getPageBuffer(), ei->length, ei->start)
+			)
 				return (0);
 			else
 				return (-1);
