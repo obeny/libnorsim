@@ -9,8 +9,8 @@ PRG_OBJS := main.o
 CFLAGS := -pipe -D_GNU_SOURCE=1 -fstack-protector-all
 CFLAGS_WRN := -Wall -Wextra
 CFLAGS_WRN += -Wnonnull -Winit-self -Wignored-qualifiers -Wunused -Wundef -Wshadow -Wpointer-arith
-CFLAGS_WRN += -Wcast-align -Wwrite-strings -Waggregate-return -Wmissing-declarations
-CFLAGS_WRN += -Wmissing-noreturn -Winline -Wno-unused-result -Wno-missing-declarations
+CFLAGS_WRN += -Wcast-align -Wwrite-strings -Wmissing-declarations -Wmissing-noreturn
+CFLAGS_WRN += -Winline -Wno-unused-result -Wno-missing-declarations
 CFLAGS_DBG := -ggdb -O0
 CFLAGS_REL := -g0 -O3 -flto
 CFLAGS_DEP := -MD -MP

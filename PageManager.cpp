@@ -10,7 +10,7 @@ PageManager::PageManager(Libnorsim &libnorsim, const unsigned pageCount)
 	m_pages.reset(new st_page_t[m_pageCount]);
 	if (!m_pages)
 		throw std::runtime_error("Couldn't allocate memory for page information structures");
-	for (long i = 0; i < m_pageCount; ++i) {
+	for (unsigned i = 0; i < m_pageCount; ++i) {
 		m_pages[i].reads = 0;
 		m_pages[i].writes = 0;
 		m_pages[i].erases = 0;
